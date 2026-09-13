@@ -26,8 +26,8 @@ body{background:#f0ede8;font-family:Georgia,serif;overflow:hidden;touch-action:n
   box-shadow:0 3px 10px rgba(0,0,0,.18);z-index:100;max-width:220px}
 #tc{width:100vw;height:100vh;overflow:hidden;user-select:none}
 svg{width:100%;height:100%;display:block}
-.marriage{stroke:#888;stroke-width:2;fill:none}
-.conn{stroke:#888;stroke-width:1.8;fill:none}
+.marriage{stroke:#888;stroke-width:2;fill:none;stroke-linecap:butt;stroke-linejoin:miter}
+.conn{stroke:#888;stroke-width:1.8;fill:none;stroke-linecap:butt;stroke-linejoin:miter}
 .sec{stroke:#e74c3c;stroke-dasharray:6,4}
 .pname{font-size:10px;font-family:Arial,sans-serif;font-weight:700;
   dominant-baseline:central;text-anchor:middle;fill:#1a1a1a;pointer-events:none}
@@ -86,29 +86,58 @@ function drawCouple(c){
   const d1=P[p1], d2=P[p2];
   if(!d1||!d2) return;
 
-  // Marriage line between the two box edges
+  // ── Marriage line ──────────────────────────────────────────────────────────
+  // The line is always drawn exactly between the two box edges.
   const lx = Math.min(d1.x,d2.x)+BOX_W/2;
   const rx = Math.max(d1.x,d2.x)-BOX_W/2;
   const my = (d1.y+d2.y)/2;
-  if(rx>lx) connL.appendChild(el('line',{x1:lx,y1:my,x2:rx,y2:my,class:`marriage ${cls}`}));
+
+  if(rx>lx){
+    connL.appendChild(el('line',{
+      x1:lx, y1:my, x2:rx, y2:my,
+      class:`marriage ${cls}`
+    }));
+  }
 
   if(!children.length) return;
-  const pmx=(d1.x+d2.x)/2, pmy=d1.y;
-  const dropY=pmy+BOX_H/2+DROP;
 
-  // Short vertical stub from couple midpoint to horizontal bar
-  connL.appendChild(el('line',{x1:pmx,y1:pmy+BOX_H/2,x2:pmx,y2:dropY,class:`conn ${cls}`}));
+  // ── Family connector ───────────────────────────────────────────────────────
+  // IMPORTANT: use the marriage-line Y (my), not d1.y.
+  // This keeps the vertical and horizontal segments joined even when either
+  // spouse is moved independently.
+  const pmx = (d1.x+d2.x)/2;
+  const startY = my;
+  const dropY = startY + BOX_H/2 + DROP;
 
-  // Horizontal bar spanning all direct children
-  const cxs=children.map(k=>P[k]?.x).filter(x=>x!=null).sort((a,b)=>a-b);
-  if(cxs.length>1)
-    connL.appendChild(el('line',{x1:cxs[0],y1:dropY,x2:cxs.at(-1),y2:dropY,class:`conn ${cls}`}));
+  // One continuous SVG path is used for the connector.
+  // This avoids tiny visual gaps between separate <line> elements and makes
+  // every vertical/horizontal intersection an exact geometric junction.
+  const path = [];
+  path.push(`M ${pmx} ${startY}`);
+  path.push(`V ${dropY}`);
 
-  // Vertical lines from bar to each child's box top
-  for(const k of children){
-    const pk=P[k]; if(!pk) continue;
-    connL.appendChild(el('line',{x1:pk.x,y1:dropY,x2:pk.x,y2:pk.y-BOX_H/2,class:`conn ${cls}`}));
+  const cxs = children
+    .map(k=>P[k]?.x)
+    .filter(x=>x!=null)
+    .sort((a,b)=>a-b);
+
+  if(cxs.length>1){
+    path.push(`M ${cxs[0]} ${dropY}`);
+    path.push(`H ${cxs.at(-1)}`);
   }
+
+  // Every child vertical starts EXACTLY at the horizontal bar and ends
+  // EXACTLY at the top edge of the child box.
+  for(const k of children){
+    const pk=P[k];
+    if(!pk) continue;
+    path.push(`M ${pk.x} ${dropY} V ${pk.y-BOX_H/2}`);
+  }
+
+  connL.appendChild(el('path',{
+    d:path.join(' '),
+    class:`conn ${cls}`
+  }));
 }
 
 function drawBox(pid){

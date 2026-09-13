@@ -1,38 +1,51 @@
+"""Albero Genealogico Gallotta – interactive HTML family tree."""
+
+import json, webbrowser
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.io as pio
 from collections import defaultdict
+from pathlib import Path
 
 INPUT_FILE = "Albero_Genealogico_Gallotta.xlsx"
 HTML_FILE  = "albero_gallotta.html"
 AUTO_OPEN  = True
 
-# Spacing
-H_UNIT = 3.0   # horizontal distance between the two spouses
-H_PAD  = 2.0   # minimum padding between adjacent families
-V_GAP  = 5.0   # vertical distance between generations
+# ── Layout constants (also embedded in JS) ───────────────────────────────────
+BOX_W      = 130   # px – person box width
+BOX_H      = 44    # px – person box height
+SPOUSE_GAP = 30    # px – marriage-line gap between spouse box edges
+FAMILY_PAD = 65    # px – minimum gap between adjacent family groups
+V_GAP      = 130   # px – vertical distance between generation centres
+CONN_DROP  = 16    # px – length of vertical stub below parent before horizontal bar
 
-# ── 1. LOAD ──────────────────────────────────────────────────────────────────
+H_UNIT = BOX_W + SPOUSE_GAP   # 160 px  (centre-to-centre for a couple)
+
+GEN_META = {
+    1: {"fill": "#f9d0cc", "stroke": "#c0392b", "label": "Generazione 1"},
+    2: {"fill": "#cce3f5", "stroke": "#2471a3", "label": "Generazione 2"},
+    3: {"fill": "#cdf0d8", "stroke": "#1e8449", "label": "Generazione 3"},
+    4: {"fill": "#e4d4f4", "stroke": "#7d3c98", "label": "Generazione 4"},
+    5: {"fill": "#fdf0cc", "stroke": "#d68910", "label": "Generazione 5"},
+}
+
+# ── 1. LOAD DATA ─────────────────────────────────────────────────────────────
 df_p = pd.read_excel(INPUT_FILE, sheet_name="Persone")
 df_r = pd.read_excel(INPUT_FILE, sheet_name="Relazioni")
 
 persons = {}
 for _, r in df_p.iterrows():
     label = f"{r.nome} {r.cognome}"
-    if pd.notna(r.soprannome) and str(r.soprannome).strip():
-        label += f' "{r.soprannome}"'
+    nick  = str(r.soprannome).strip() if pd.notna(r.soprannome) and str(r.soprannome).strip() else ""
     persons[int(r.person_id)] = {
-        "label":   label,
-        "nome":    str(r.nome),
-        "cognome": str(r.cognome),
-        "gen":     int(r.generazione),
+        "label": label, "nick": nick,
+        "nome": str(r.nome), "cognome": str(r.cognome),
+        "gen": int(r.generazione),
     }
 
-person_spouses = defaultdict(list)   # pid → [spouses, ordered by first appearance]
+person_spouses = defaultdict(list)
 seen_marriages = set()
 all_marriages  = []
-parents_of     = defaultdict(list)   # child → [parents]
-children_of    = defaultdict(list)   # parent → [children]
+parents_of     = defaultdict(list)
+children_of    = defaultdict(list)
 
 for _, r in df_r[df_r.tipo == "matrimonio"].iterrows():
     p1, p2 = int(r.person_id_1), int(r.person_id_2)
@@ -48,20 +61,32 @@ for _, r in df_r[df_r.tipo == "genitore"].iterrows():
     parents_of[child].append(parent)
     children_of[parent].append(child)
 
-# Shared children of each couple
-couple_children = {}
-for m in all_marriages:
-    p1, p2 = m
-    couple_children[m] = sorted(set(children_of[p1]) & set(children_of[p2]))
+couple_children = {
+    m: sorted(set(children_of[m[0]]) & set(children_of[m[1]]))
+    for m in all_marriages
+}
 
-# Primary couple key for each person (first marriage encountered)
-primary_couple = {}
-for pid, sp_list in person_spouses.items():
-    primary_couple[pid] = tuple(sorted([pid, sp_list[0]]))
+# ── 2. FIX MISSING GEN-2 GALLOTTA CONNECTIONS ────────────────────────────────
+# Five gen-2 Gallotta children have no parent rows → link them to (1, 2).
+GEN1 = (1, 2)
+for pid, info in persons.items():
+    if info["gen"] == 2 and info["cognome"] == "Gallotta" and not parents_of.get(pid):
+        parents_of[pid] = [1, 2]
+        for gp in (1, 2):
+            if pid not in children_of[gp]:
+                children_of[gp].append(pid)
+        cc = couple_children.setdefault(GEN1, [])
+        if pid not in cc:
+            cc.append(pid)
+            cc.sort()
 
-# ── 2. TREE STRUCTURE ────────────────────────────────────────────────────────
+# ── 3. TREE STRUCTURE ─────────────────────────────────────────────────────────
+primary_couple = {
+    pid: tuple(sorted([pid, sp_list[0]]))
+    for pid, sp_list in person_spouses.items()
+}
+
 def tree_children(ck):
-    """Ordered child couple-keys of ck (following primary couples)."""
     raw = couple_children.get(ck, []) if len(ck) == 2 else [
         c for c in children_of[ck[0]] if len(parents_of[c]) == 1
     ]
@@ -73,287 +98,371 @@ def tree_children(ck):
             result.append(child_ck)
     return result
 
-# All couple-keys (including single-parent where relevant)
 all_ck = set(all_marriages)
 for pid in persons:
     if not person_spouses[pid]:
-        ck_single = (pid,)
-        if tree_children(ck_single):
-            all_ck.add(ck_single)
+        ck_s = (pid,)
+        if tree_children(ck_s):
+            all_ck.add(ck_s)
 
-# Root couple-keys: no member has parents in the dataset
 root_cks = sorted(
     [ck for ck in all_ck if all(not parents_of.get(p) for p in ck)],
     key=lambda ck: ck[0],
 )
 
-# ── 3. SUBTREE WIDTHS ────────────────────────────────────────────────────────
+# ── 4. SUBTREE WIDTHS ─────────────────────────────────────────────────────────
 _w = {}
 
 def subtree_width(ck):
     if ck in _w:
         return _w[ck]
     kids = tree_children(ck)
-    min_w = len(ck) * H_UNIT + H_PAD
-    # Extra width for secondary marriages of couple members
-    sec_extra = 0
-    for p in ck:
-        for sec_sp in person_spouses[p][1:]:
-            sec_key = tuple(sorted([p, sec_sp]))
-            n_sec_kids = len(couple_children.get(sec_key, []))
-            sec_extra += (n_sec_kids + 1) * H_UNIT + H_PAD
+    min_w = len(ck) * H_UNIT + FAMILY_PAD
+    sec_extra = sum(
+        (len(couple_children.get(tuple(sorted([p, sp])), [])) + 1) * H_UNIT + FAMILY_PAD
+        for p in ck for sp in person_spouses[p][1:]
+    )
     w = (max(sum(subtree_width(c) for c in kids), min_w) if kids else min_w) + sec_extra
     _w[ck] = w
     return w
 
-# ── 4. ASSIGN POSITIONS ──────────────────────────────────────────────────────
-pos = {}   # pid → (x, y)
+# ── 5. ASSIGN POSITIONS ───────────────────────────────────────────────────────
+pos = {}
 
-def place(ck, cx, y):
-    # Position this couple's two members
+def place(ck, cx):
+    cy = (persons[ck[0]]["gen"] - 1) * V_GAP
     if len(ck) == 2:
-        pos[ck[0]] = (cx - H_UNIT / 2, y)
-        pos[ck[1]] = (cx + H_UNIT / 2, y)
+        pos[ck[0]] = (cx - H_UNIT / 2, cy)
+        pos[ck[1]] = (cx + H_UNIT / 2, cy)
     else:
-        pos[ck[0]] = (cx, y)
+        pos[ck[0]] = (cx, cy)
     kids = tree_children(ck)
     if not kids:
         return
-    # Total width of primary children (exclude secondary-marriage extra)
     sec_extra = sum(
-        (len(couple_children.get(tuple(sorted([p, sec_sp])), [])) + 1) * H_UNIT + H_PAD
-        for p in ck
-        for sec_sp in person_spouses[p][1:]
+        (len(couple_children.get(tuple(sorted([p, sp])), [])) + 1) * H_UNIT + FAMILY_PAD
+        for p in ck for sp in person_spouses[p][1:]
     )
-    prim_total = sum(subtree_width(c) for c in kids) - sec_extra
-    # Centre the children block under this couple, reserving extra space at right
-    x = cx - (prim_total + sec_extra) / 2
+    total = sum(subtree_width(c) for c in kids)
+    x = cx - (total + sec_extra) / 2
     for c in kids:
-        # Use the raw (non-secondary-expanded) width for primary children
         w = subtree_width(c)
-        # Subtract secondary extras contributed by c's own members
-        own_extra = sum(
-            (len(couple_children.get(tuple(sorted([p2, sec_sp])), [])) + 1) * H_UNIT + H_PAD
-            for p2 in c
-            for sec_sp in person_spouses[p2][1:]
+        own_sec = sum(
+            (len(couple_children.get(tuple(sorted([p2, sp])), [])) + 1) * H_UNIT + FAMILY_PAD
+            for p2 in c for sp in person_spouses[p2][1:]
         )
-        place(c, x + (w - own_extra) / 2, y - V_GAP)
+        place(c, x + (w - own_sec) / 2)
         x += w
 
 x_off = 0
 for rck in root_cks:
     w = subtree_width(rck)
-    place(rck, x_off + w / 2, 0)
-    x_off += w + H_PAD * 2
+    place(rck, x_off + w / 2)
+    x_off += w + FAMILY_PAD * 2
 
-# Post-process: place secondary spouses and their children
+# Secondary spouses: place immediately right of primary spouse (not at row end)
 for pid, sp_list in person_spouses.items():
     if len(sp_list) < 2 or pid not in pos:
         continue
-    px, py = pos[pid]
+    pid_cy = (persons[pid]["gen"] - 1) * V_GAP
+    prim_sp = sp_list[0]
+    anchor_x = pos[prim_sp][0] if prim_sp in pos else pos[pid][0]
     for sec_sp in sp_list[1:]:
         if sec_sp in pos:
             continue
-        # Anchor secondary spouse just right of rightmost node at this y-level
-        same_y_xs = [v[0] for v in pos.values() if abs(v[1] - py) < 0.1]
-        sec_x = (max(same_y_xs) + H_UNIT + H_PAD) if same_y_xs else (px + H_UNIT)
-        pos[sec_sp] = (sec_x, py)
-        # Place secondary children
+        sec_x = anchor_x + H_UNIT + FAMILY_PAD
+        pos[sec_sp] = (sec_x, pid_cy)
         sec_key = tuple(sorted([pid, sec_sp]))
         sec_kids = couple_children.get(sec_key, [])
-        mid_x = (px + sec_x) / 2
+        mid_x = (pos[pid][0] + sec_x) / 2
         for i, kid in enumerate(sec_kids):
             if kid not in pos:
-                pos[kid] = (
-                    mid_x + (i - (len(sec_kids) - 1) / 2) * H_UNIT,
-                    py - V_GAP,
-                )
+                kid_cy = (persons[kid]["gen"] - 1) * V_GAP
+                pos[kid] = (mid_x + (i - (len(sec_kids) - 1) / 2) * H_UNIT, kid_cy)
 
-# ── 5. BUILD PLOTLY TRACES ────────────────────────────────────────────────────
-GEN_COLORS = {
-    1: "#c0392b",
-    2: "#2471a3",
-    3: "#1e8449",
-    4: "#7d3c98",
-    5: "#d68910",
+# ── 6. BUILD JSON FOR JAVASCRIPT ──────────────────────────────────────────────
+persons_js = {
+    str(pid): {
+        "label": info["label"], "nick": info["nick"],
+        "gen":   info["gen"],
+        "x":     round(pos[pid][0], 1),
+        "y":     round(pos[pid][1], 1),
+    }
+    for pid, info in persons.items() if pid in pos
 }
 
-# ── Edge traces (marriage lines + tree connectors) ──
-primary_lx, primary_ly = [], []   # primary marriage lines & tree connectors
-secondary_lx, secondary_ly = [], []  # secondary marriage lines
-
-def seg(lx, ly, x0, y0, x1, y1):
-    lx.extend([x0, x1, None])
-    ly.extend([y0, y1, None])
-
-done = set()
-
-def draw_connectors(ck):
-    if ck in done:
-        return
-    done.add(ck)
-
-    # Marriage line between the two spouses
-    if len(ck) == 2 and all(p in pos for p in ck):
-        seg(primary_lx, primary_ly, pos[ck[0]][0], pos[ck[0]][1],
-            pos[ck[1]][0], pos[ck[1]][1])
-
-    kids = tree_children(ck)
-    if not kids:
-        return
-
-    # Parent midpoint
-    if len(ck) == 2 and all(p in pos for p in ck):
-        pmx = (pos[ck[0]][0] + pos[ck[1]][0]) / 2
-        pmy = pos[ck[0]][1]
-    elif ck[0] in pos:
-        pmx, pmy = pos[ck[0]]
-    else:
-        for c in kids:
-            draw_connectors(c)
-        return
-
-    # Midpoints of child couples
-    child_mids = []
-    for c in kids:
-        if len(c) == 2 and all(p in pos for p in c):
-            cmx = (pos[c[0]][0] + pos[c[1]][0]) / 2
-            cmy = pos[c[0]][1]
-        elif c[0] in pos:
-            cmx, cmy = pos[c[0]]
-        else:
-            continue
-        child_mids.append((cmx, cmy))
-
-    if not child_mids:
-        for c in kids:
-            draw_connectors(c)
-        return
-
-    child_y = child_mids[0][1]
-    drop_y  = (pmy + child_y) / 2
-
-    # Vertical drop from parent midpoint
-    seg(primary_lx, primary_ly, pmx, pmy, pmx, drop_y)
-    # Horizontal sibling bar
-    xs = sorted(m[0] for m in child_mids)
-    seg(primary_lx, primary_ly, xs[0], drop_y, xs[-1], drop_y)
-    # Vertical drops to each child couple midpoint
-    for cmx, cmy in child_mids:
-        seg(primary_lx, primary_ly, cmx, drop_y, cmx, cmy)
-
-    for c in kids:
-        draw_connectors(c)
-
-for rck in root_cks:
-    draw_connectors(rck)
-
-# Secondary marriage lines and their child connectors
-for pid, sp_list in person_spouses.items():
-    if len(sp_list) < 2:
+couples_js = []
+for m in all_marriages:
+    p1, p2 = m
+    if p1 not in pos or p2 not in pos:
         continue
-    for sec_sp in sp_list[1:]:
-        if pid not in pos or sec_sp not in pos:
-            continue
-        seg(secondary_lx, secondary_ly,
-            pos[pid][0], pos[pid][1], pos[sec_sp][0], pos[sec_sp][1])
-        sec_key = tuple(sorted([pid, sec_sp]))
-        sec_kids = [k for k in couple_children.get(sec_key, []) if k in pos]
-        if sec_kids:
-            pmx = (pos[pid][0] + pos[sec_sp][0]) / 2
-            pmy = pos[pid][1]
-            child_y = pos[sec_kids[0]][1]
-            drop_y  = (pmy + child_y) / 2
-            seg(secondary_lx, secondary_ly, pmx, pmy, pmx, drop_y)
-            xs = sorted(pos[k][0] for k in sec_kids)
-            seg(secondary_lx, secondary_ly, xs[0], drop_y, xs[-1], drop_y)
-            for k in sec_kids:
-                seg(secondary_lx, secondary_ly, pos[k][0], drop_y, pos[k][0], pos[k][1])
+    secondary = len(person_spouses[p1]) > 1 and person_spouses[p1][0] != p2
+    couples_js.append({
+        "id": f"m{p1}_{p2}", "p1": p1, "p2": p2,
+        "children": [k for k in couple_children.get(m, []) if k in pos],
+        "secondary": secondary,
+    })
 
-edges_primary = go.Scatter(
-    x=primary_lx, y=primary_ly,
-    mode="lines",
-    line=dict(width=1.5, color="#666666"),
-    hoverinfo="none",
-)
-edges_secondary = go.Scatter(
-    x=secondary_lx, y=secondary_ly,
-    mode="lines",
-    line=dict(width=1.5, color="#e74c3c", dash="dash"),
-    hoverinfo="none",
-    name="Secondo matrimonio",
+gens_present = sorted({info["gen"] for info in persons.values()})
+legend_html = "".join(
+    f'<div class="li"><span class="ld" style="background:{GEN_META[g]["fill"]};'
+    f'border:2px solid {GEN_META[g]["stroke"]}"></span>{GEN_META[g]["label"]}</div>'
+    for g in gens_present
+) + (
+    '<div class="li" style="margin-top:7px;border-top:1px solid #eee;padding-top:5px">'
+    '<svg width="26" height="10"><line x1="0" y1="5" x2="26" y2="5" '
+    'stroke="#e74c3c" stroke-width="2" stroke-dasharray="5,3"/></svg>'
+    ' Secondo matrimonio</div>'
 )
 
-# ── Node trace ──
-nx_l, ny_l, node_text, hover_text, node_colors, node_symbols = [], [], [], [], [], []
+# ── 7. GENERATE HTML ──────────────────────────────────────────────────────────
+html = f"""<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Albero Genealogico Gallotta</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#f0ede8;font-family:Georgia,serif;overflow:hidden;touch-action:none}}
+#title{{position:fixed;top:12px;left:50%;transform:translateX(-50%);font-size:22px;
+  color:#2c2c2c;letter-spacing:.5px;text-shadow:1px 1px 3px rgba(255,255,255,.8);
+  z-index:20;pointer-events:none}}
+#legend{{position:fixed;top:52px;left:14px;background:rgba(255,255,255,.93);
+  border:1px solid #ccc;border-radius:10px;padding:10px 14px;font-size:12px;
+  z-index:20;box-shadow:0 2px 8px rgba(0,0,0,.12)}}
+#legend h4{{margin-bottom:6px;font-size:13px;color:#333;font-weight:bold}}
+.li{{display:flex;align-items:center;gap:7px;margin:4px 0;color:#444}}
+.ld{{width:16px;height:14px;border-radius:3px;flex-shrink:0}}
+#controls{{position:fixed;bottom:18px;right:18px;display:flex;gap:6px;z-index:20}}
+#controls button{{width:38px;height:38px;border:1px solid #bbb;
+  background:rgba(255,255,255,.9);border-radius:8px;cursor:pointer;
+  font-size:15px;color:#555;box-shadow:0 1px 4px rgba(0,0,0,.15)}}
+#controls button:hover{{background:#fff;color:#222}}
+#autospace{{width:auto!important;padding:0 10px;font-size:12px}}
+#tip{{position:fixed;background:rgba(255,255,255,.97);border:1px solid #ccc;
+  border-radius:9px;padding:7px 13px;font-size:12px;pointer-events:none;display:none;
+  box-shadow:0 3px 10px rgba(0,0,0,.18);z-index:100;max-width:220px}}
+#tc{{width:100vw;height:100vh;overflow:hidden;user-select:none}}
+svg{{width:100%;height:100%;display:block}}
+.marriage{{stroke:#888;stroke-width:2;fill:none}}
+.conn{{stroke:#888;stroke-width:1.8;fill:none}}
+.sec{{stroke:#e74c3c;stroke-dasharray:6,4}}
+.pname{{font-size:10px;font-family:Arial,sans-serif;font-weight:700;
+  dominant-baseline:central;text-anchor:middle;fill:#1a1a1a;pointer-events:none}}
+.pnick{{font-size:9px;font-family:Arial,sans-serif;font-weight:400;font-style:italic;
+  dominant-baseline:central;text-anchor:middle;fill:#555;pointer-events:none}}
+.person{{cursor:grab;filter:drop-shadow(1px 2px 3px rgba(0,0,0,.18));transition:filter .1s}}
+.person:active{{cursor:grabbing;filter:drop-shadow(2px 4px 8px rgba(0,0,0,.35))}}
+</style>
+</head>
+<body>
+<div id="title">Albero Genealogico Gallotta</div>
+<div id="legend"><h4>Generazioni</h4>{legend_html}</div>
+<div id="tip"></div>
+<div id="controls">
+  <button id="btn-zi"    title="Zoom +">+</button>
+  <button id="btn-zo"    title="Zoom -">−</button>
+  <button id="btn-fit"   title="Fit">⌂</button>
+  <button id="autospace" title="Risolvi sovrapposizioni">Auto-spazio</button>
+</div>
+<div id="tc">
+  <svg id="tree" xmlns="http://www.w3.org/2000/svg">
+    <g id="canvas">
+      <g id="conn-layer"></g>
+      <g id="box-layer"></g>
+    </g>
+  </svg>
+</div>
+<script>
+// ── Data from Python ──────────────────────────────────────────────────────────
+const P       = {json.dumps(persons_js, ensure_ascii=False)};
+const COUPLES = {json.dumps(couples_js, ensure_ascii=False)};
+const GEN_META= {json.dumps({str(g): m for g, m in GEN_META.items()}, ensure_ascii=False)};
+const BOX_W={BOX_W}, BOX_H={BOX_H}, DROP={CONN_DROP};
 
-for pid, info in sorted(persons.items()):
-    if pid not in pos:
-        continue
-    x, y = pos[pid]
-    nx_l.append(x)
-    ny_l.append(y)
-    node_text.append(info["label"])
-    hover_text.append(
-        f"<b>{info['label']}</b><br>"
-        f"Generazione {info['gen']}"
-    )
-    node_colors.append(GEN_COLORS.get(info["gen"], "#888888"))
+// ── SVG helpers ───────────────────────────────────────────────────────────────
+const NS='http://www.w3.org/2000/svg';
+const connL = document.getElementById('conn-layer');
+const boxL  = document.getElementById('box-layer');
 
-nodes = go.Scatter(
-    x=nx_l, y=ny_l,
-    mode="markers+text",
-    text=node_text,
-    hovertext=hover_text,
-    hoverinfo="text",
-    textposition="top center",
-    textfont=dict(size=9, family="Arial"),
-    marker=dict(
-        size=14,
-        color=node_colors,
-        line=dict(width=2, color="white"),
-    ),
-)
+function el(tag, attrs){{
+  const e = document.createElementNS(NS, tag);
+  for(const[k,v] of Object.entries(attrs)) e.setAttribute(k,v);
+  return e;
+}}
 
-# ── Legend entries (one per generation) ──
-legend_traces = [
-    go.Scatter(
-        x=[None], y=[None],
-        mode="markers",
-        marker=dict(size=10, color=color),
-        name=f"Generazione {gen}",
-        showlegend=True,
-    )
-    for gen, color in sorted(GEN_COLORS.items())
-    if any(info["gen"] == gen for info in persons.values())
-]
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(){{
+  connL.innerHTML=''; boxL.innerHTML='';
+  for(const c of COUPLES) drawCouple(c);
+  for(const pid of Object.keys(P)) drawBox(pid);
+}}
 
-# ── 6. FIGURE ────────────────────────────────────────────────────────────────
-fig = go.Figure(
-    data=[edges_primary, edges_secondary, nodes] + legend_traces,
-    layout=go.Layout(
-        title=dict(
-            text="Albero Genealogico Gallotta",
-            x=0.5, xanchor="center",
-            font=dict(size=26, family="Georgia, serif"),
-        ),
-        showlegend=True,
-        legend=dict(x=0.01, y=0.99, bgcolor="rgba(255,255,255,0.8)",
-                    bordercolor="#ccc", borderwidth=1),
-        hovermode="closest",
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False,
-                   fixedrange=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False,
-                   fixedrange=False),
-        plot_bgcolor="white",
-        paper_bgcolor="#f5f5f0",
-        margin=dict(l=20, r=20, t=70, b=20),
-    ),
-)
+function drawCouple(c){{
+  const {{id,p1,p2,children,secondary}} = c;
+  const cls = secondary ? 'sec' : '';
+  const d1=P[p1], d2=P[p2];
+  if(!d1||!d2) return;
 
-pio.write_html(
-    fig,
-    file=HTML_FILE,
-    auto_open=AUTO_OPEN,
-    include_plotlyjs=True,
-)
+  // Marriage line between the two box edges
+  const lx = Math.min(d1.x,d2.x)+BOX_W/2;
+  const rx = Math.max(d1.x,d2.x)-BOX_W/2;
+  const my = (d1.y+d2.y)/2;
+  if(rx>lx) connL.appendChild(el('line',{{x1:lx,y1:my,x2:rx,y2:my,class:`marriage ${{cls}}`}}));
+
+  if(!children.length) return;
+  const pmx=(d1.x+d2.x)/2, pmy=d1.y;
+  const dropY=pmy+BOX_H/2+DROP;
+
+  // Short vertical stub from couple midpoint to horizontal bar
+  connL.appendChild(el('line',{{x1:pmx,y1:pmy+BOX_H/2,x2:pmx,y2:dropY,class:`conn ${{cls}}`}}));
+
+  // Horizontal bar spanning all direct children
+  const cxs=children.map(k=>P[k]?.x).filter(x=>x!=null).sort((a,b)=>a-b);
+  if(cxs.length>1)
+    connL.appendChild(el('line',{{x1:cxs[0],y1:dropY,x2:cxs.at(-1),y2:dropY,class:`conn ${{cls}}`}}));
+
+  // Vertical lines from bar to each child's box top
+  for(const k of children){{
+    const pk=P[k]; if(!pk) continue;
+    connL.appendChild(el('line',{{x1:pk.x,y1:dropY,x2:pk.x,y2:pk.y-BOX_H/2,class:`conn ${{cls}}`}}));
+  }}
+}}
+
+function drawBox(pid){{
+  const p=P[pid], gm=GEN_META[p.gen];
+  const g=el('g',{{class:'person','data-pid':pid}});
+  g.appendChild(el('rect',{{
+    x:p.x-BOX_W/2, y:p.y-BOX_H/2, width:BOX_W, height:BOX_H,
+    rx:8, ry:8, fill:gm.fill, stroke:gm.stroke, 'stroke-width':2
+  }}));
+  if(p.nick){{
+    const t1=el('text',{{x:p.x,y:p.y-8,class:'pname'}}); t1.textContent=p.label; g.appendChild(t1);
+    const t2=el('text',{{x:p.x,y:p.y+9,class:'pnick'}}); t2.textContent=`"${{p.nick}}"`; g.appendChild(t2);
+  }}else{{
+    const t=el('text',{{x:p.x,y:p.y,class:'pname'}}); t.textContent=p.label; g.appendChild(t);
+  }}
+  g.addEventListener('mouseenter', e=>showTip(e,pid));
+  g.addEventListener('mousemove',  e=>moveTip(e));
+  g.addEventListener('mouseleave', hideTip);
+  boxL.appendChild(g);
+}}
+
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+const tip=document.getElementById('tip');
+function showTip(e,pid){{
+  const p=P[pid], gm=GEN_META[p.gen];
+  tip.innerHTML=`<b style="color:${{gm.stroke}}">${{p.label}}</b>`+
+    (p.nick?`<br><i>"${{p.nick}}"</i>`:'') +
+    `<br><span style="color:#777">Gen.${{p.gen}}</span>`;
+  tip.style.display='block'; moveTip(e);
+}}
+function moveTip(e){{tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY-10)+'px';}}
+function hideTip(){{tip.style.display='none';}}
+
+// ── Zoom / pan ────────────────────────────────────────────────────────────────
+const tc=document.getElementById('tc');
+const canvas=document.getElementById('canvas');
+let scale=1,tx=0,ty=0;
+function applyT(){{canvas.setAttribute('transform',`translate(${{tx}},${{ty}}) scale(${{scale}})`);}}
+
+function zoom(f,cx,cy){{
+  cx=cx??tc.clientWidth/2; cy=cy??tc.clientHeight/2;
+  const ns=Math.min(Math.max(scale*f,.06),6);
+  tx=cx-(cx-tx)*(ns/scale); ty=cy-(cy-ty)*(ns/scale); scale=ns; applyT();
+}}
+function fitView(){{
+  const xs=Object.values(P).map(p=>p.x);
+  const ys=Object.values(P).map(p=>p.y);
+  const vw=tc.clientWidth, vh=tc.clientHeight;
+  const pad=70;
+  const tw=Math.max(...xs)-Math.min(...xs)+BOX_W+pad*2;
+  const th=Math.max(...ys)-Math.min(...ys)+BOX_H+pad*2;
+  scale=Math.min(vw/tw,vh/th)*.93;
+  tx=(vw-(Math.max(...xs)+Math.min(...xs))*scale)/2;
+  ty=(vh-(Math.max(...ys)+Math.min(...ys))*scale)/2;
+  applyT();
+}}
+
+tc.addEventListener('wheel',e=>{{
+  e.preventDefault(); zoom(e.deltaY<0?1.12:.89,e.clientX,e.clientY);
+}},{{passive:false}});
+
+document.getElementById('btn-zi').onclick=()=>zoom(1.25);
+document.getElementById('btn-zo').onclick=()=>zoom(.8);
+document.getElementById('btn-fit').onclick=fitView;
+
+// ── Drag / pan ────────────────────────────────────────────────────────────────
+let dragPid=null,dragStart=null,isPan=false,panStart=null,rafId=null;
+
+function toSVG(cx,cy){{
+  const m=canvas.getScreenCTM().inverse();
+  return {{x:cx*m.a+cy*m.c+m.e, y:cx*m.b+cy*m.d+m.f}};
+}}
+
+tc.addEventListener('pointerdown',e=>{{
+  const pg=e.target.closest('.person');
+  if(pg){{
+    dragPid=pg.dataset.pid;
+    const sv=toSVG(e.clientX,e.clientY);
+    dragStart={{mx:sv.x,my:sv.y,ox:P[dragPid].x,oy:P[dragPid].y}};
+    tc.setPointerCapture(e.pointerId);
+  }}else{{
+    isPan=true; panStart={{x:e.clientX,y:e.clientY,tx,ty}};
+    tc.setPointerCapture(e.pointerId);
+  }}
+}});
+
+tc.addEventListener('pointermove',e=>{{
+  if(dragPid){{
+    const sv=toSVG(e.clientX,e.clientY);
+    P[dragPid].x=dragStart.ox+(sv.x-dragStart.mx);
+    P[dragPid].y=dragStart.oy+(sv.y-dragStart.my);
+    if(!rafId) rafId=requestAnimationFrame(()=>{{render();rafId=null;}});
+  }}else if(isPan){{
+    tx=panStart.tx+(e.clientX-panStart.x);
+    ty=panStart.ty+(e.clientY-panStart.y);
+    applyT();
+  }}
+}});
+
+tc.addEventListener('pointerup',e=>{{
+  dragPid=null; dragStart=null; isPan=false; panStart=null;
+  tc.releasePointerCapture(e.pointerId);
+}});
+
+// ── Auto-space ────────────────────────────────────────────────────────────────
+document.getElementById('autospace').onclick=autoSpace;
+
+function autoSpace(){{
+  const byY={{}};
+  for(const[pid,p] of Object.entries(P)){{
+    const k=Math.round(p.y); (byY[k]||(byY[k]=[])).push(pid);
+  }}
+  const MIN=BOX_W+8;
+  for(const pids of Object.values(byY)){{
+    pids.sort((a,b)=>P[a].x-P[b].x);
+    // Forward pass: push right
+    for(let i=1;i<pids.length;i++){{
+      if(P[pids[i]].x-P[pids[i-1]].x<MIN)
+        P[pids[i]].x=P[pids[i-1]].x+MIN;
+    }}
+    // Backward pass: push left
+    for(let i=pids.length-2;i>=0;i--){{
+      if(P[pids[i+1]].x-P[pids[i]].x<MIN)
+        P[pids[i]].x=P[pids[i+1]].x-MIN;
+    }}
+  }}
+  render(); fitView();
+}}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+render();
+autoSpace();   // resolve any initial overlaps, then fit
+</script>
+</body>
+</html>"""
+
+Path(HTML_FILE).write_text(html, encoding="utf-8")
+if AUTO_OPEN:
+    webbrowser.open(Path(HTML_FILE).resolve().as_uri())

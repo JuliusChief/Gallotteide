@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Albero Genealogico Gallotta</title>
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --surface: #ffffff;
+    --surface-2: #f0ede6;
+    --text: #23211d;
+    --muted: #6d675d;
+    --line: #b9b2a5;
+    --line-strong: #4a453d;
+    --accent: #b5532f;
+    --shadow: 0 1px 2px rgba(0,0,0,.08), 0 2px 8px rgba(0,0,0,.06);
+    --dim: .18;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1917;
+      --surface: #262421;
+      --surface-2: #302d29;
+      --text: #ece8e1;
+      --muted: #a39d92;
+      --line: #5d574e;
+      --line-strong: #d8d2c8;
+      --accent: #e4875f;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.3);
+      --dim: .22;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--surface-2);
+    flex-wrap: wrap;
+    z-index: 3;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
+  header .stats { color: var(--muted); font-size: 13px; }
+  .search { position: relative; margin-left: auto; flex: 0 1 280px; min-width: 180px; }
+  .search input {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+  }
+  .search input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .results {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--surface); border-radius: 8px; box-shadow: var(--shadow);
+    list-style: none; margin: 0; padding: 4px; max-height: 320px; overflow: auto; display: none;
+  }
+  .results.open { display: block; }
+  .results li { padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+  .results li small { color: var(--muted); }
+  .results li.active, .results li:hover { background: var(--surface-2); }
+
+  main { position: relative; flex: 1; min-height: 0; }
+  #tree { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; user-select: none; }
+  #tree.dragging { cursor: grabbing; }
+
+  .gen-band text { fill: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .gen-band rect { fill: var(--surface-2); opacity: .45; }
+
+  .link { fill: none; stroke: var(--line); stroke-width: 1.5; transition: opacity .2s, stroke .2s; }
+  .link.marriage { stroke: var(--line-strong); stroke-width: 2; }
+  .link.hl { stroke: var(--accent); stroke-width: 2.5; }
+
+  .person { cursor: pointer; transition: opacity .2s; }
+  .person .card { fill: var(--surface); stroke: var(--line); stroke-width: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,.12)); }
+  .person.inlaw .card { fill: var(--surface-2); }
+  .person .stripe { stroke: none; }
+  .person .name { fill: var(--text); font-weight: 600; font-size: 13.5px; }
+  .person .surname { fill: var(--muted); font-size: 12px; }
+  .person .nick { fill: var(--accent); font-size: 11.5px; font-style: italic; }
+  .person:hover .card { stroke: var(--line-strong); }
+  .person.selected .card { stroke: var(--accent); stroke-width: 3; }
+  .person.match .card { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
+  .dim { opacity: var(--dim); }
+
+  .toggle { cursor: pointer; }
+  .toggle circle { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.2; }
+  .toggle text { fill: var(--text); font-size: 12px; font-weight: 700; }
+  .toggle:hover circle { fill: var(--surface-2); }
+
+  .controls {
+    position: absolute; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 2;
+  }
+  .controls button, .panel button.close {
+    width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--text); font-size: 18px; cursor: pointer; box-shadow: var(--shadow);
+    display: grid; place-items: center; padding: 0;
+  }
+  .controls button:hover { background: var(--surface-2); }
+  .controls .sep { height: 4px; }
+
+  .legend {
+    position: absolute; left: 64px; bottom: 16px; z-index: 2;
+    background: var(--surface); border-radius: 10px; box-shadow: var(--shadow);
+    padding: 8px 10px; max-width: calc(100% - 96px);
+  }
+  .legend h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 4px; }
+  .legend ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 10px; }
+  .legend li { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 2px 4px; border-radius: 6px; }
+  .legend li:hover { background: var(--surface-2); }
+  .legend .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend .inlaw-sw { background: var(--surface-2); border: 1px solid var(--line); }
+
+  .panel {
+    position: absolute; top: 16px; right: 16px; width: 300px; max-height: calc(100% - 32px); overflow: auto;
+    background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); padding: 16px 16px 12px;
+    z-index: 2; display: none;
+  }
+  .panel.open { display: block; }
+  .panel .close { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; font-size: 16px; box-shadow: none; border: none; }
+  .panel h2 { margin: 0 32px 2px 0; font-size: 20px; line-height: 1.2; }
+  .panel .nick { color: var(--accent); font-style: italic; margin-bottom: 4px; }
+  .panel .meta { color: var(--muted); font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .panel .meta .sw { width: 10px; height: 10px; border-radius: 3px; }
+  .panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 0 4px; }
+  .panel ul { list-style: none; margin: 0; padding: 0; }
+  .panel li a { display: block; padding: 4px 6px; margin: 0 -6px; border-radius: 6px; color: var(--text); text-decoration: none; }
+  .panel li a:hover { background: var(--surface-2); }
+  .panel li a small { color: var(--muted); }
+  .panel .empty { color: var(--muted); font-size: 13px; }
+  .panel .actions { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+  .panel .actions button {
+    font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); cursor: pointer;
+  }
+  .panel .actions button:hover { background: var(--surface-2); }
+
+  .hint { position: absolute; right: 16px; bottom: 16px; color: var(--muted); font-size: 12px; z-index: 1; text-align: right; }
+
+  @media (max-width: 640px) {
+    header { gap: 8px 12px; }
+    .search { flex: 1 1 100%; margin-left: 0; }
+    .panel { top: auto; bottom: 0; right: 0; left: 0; width: auto; max-height: 55%; border-radius: 14px 14px 0 0; }
+    .legend { display: none; }
+    .hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Albero Genealogico</h1>
+  <span class="stats" id="stats"></span>
+  <div class="search">
+    <input id="search" type="search" placeholder="Cerca una persona…" autocomplete="off" aria-label="Cerca una persona">
+    <ul class="results" id="results" role="listbox"></ul>
+  </div>
+</header>
+<main>
+  <svg id="tree" aria-label="Albero genealogico">
+    <defs><clipPath id="card-clip"><rect width="150" height="58" rx="9"/></clipPath></defs>
+    <g id="viewport"></g>
+  </svg>
+  <div class="controls">
+    <button id="zoom-in" title="Ingrandisci">+</button>
+    <button id="zoom-out" title="Riduci">−</button>
+    <button id="fit" title="Adatta allo schermo">⤢</button>
+    <span class="sep"></span>
+    <button id="expand-all" title="Espandi tutto">⊞</button>
+    <button id="collapse-all" title="Comprimi alle prime generazioni">⊟</button>
+  </div>
+  <div class="legend" id="legend"></div>
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+  <div class="hint">Trascina per spostarti · rotella per lo zoom · clicca una persona per i dettagli</div>
+</main>
+<script src="data.js"></script>
+<script>
+(() => {
+  const DATA = window.FAMILY_DATA;
+  const SVG_NS = "http://www.w3.org/2000/svg";
+
+  // Card and spacing sizes (SVG units)
+  const W = 150, H = 58, GAP_COUPLE = 18, GAP_SIBLING = 26, GAP_TREE = 70, ROW = 140, BAND_LABEL = 110;
+  const PALETTE = ["#c4572f", "#2f7fb5", "#3c9a5f", "#8a5bb8", "#c9952b", "#c2477f", "#2a9d9d", "#7a8a2a"];
+
+  // ---------- Data model ----------
+  const people = new Map();
+  for (const p of DATA.persons) people.set(p.id, { ...p, parents: [], children: [], spouses: [] });
+  for (const r of DATA.relations) {
+    const a = people.get(r.a), b = people.get(r.b);
+    if (!a || !b) continue;
+    if (r.tipo === "genitore") {
+      if (!b.parents.includes(a.id)) b.parents.push(a.id);
+      if (!a.children.includes(b.id)) a.children.push(b.id);
+    } else if (r.tipo === "matrimonio") {
+      if (!a.spouses.includes(b.id)) a.spouses.push(b.id);
+      if (!b.spouses.includes(a.id)) b.spouses.push(a.id);
+    }
+  }
+  for (const p of people.values()) p.children.sort((x, y) => x - y);
+  const P = id => people.get(id);
+  const fullName = p => `${p.nome} ${p.cognome}`.trim();
+
+  // ---------- Build family blocks ----------
+  // A block is a person of the family line together with the spouses who married in,
+  // plus one "union" per spouse holding their common children.
+  const blockOf = new Map();   // person id -> block in which the person is drawn
+  const roots = [];
+  const placed = new Set();
+
+  function makeBlock(pid, level) {
+    const p = P(pid);
+    placed.add(pid);
+    const block = { pid, level, spouses: [], unions: [], blockChildren: [] };
+    blockOf.set(pid, block);
+    for (const sid of p.spouses) {
+      const s = P(sid);
+      // Spouses with their own parents are drawn in their own family; we just link to them.
+      if (!placed.has(sid) && s.parents.length === 0) {
+        placed.add(sid);
+        blockOf.set(sid, block);
+        block.spouses.push(sid);
+      }
+    }
+    const claimed = new Set();
+    const partners = [...block.spouses, ...p.spouses.filter(s => !block.spouses.includes(s))];
+    for (const sid of partners) {
+      const kids = p.children.filter(c => P(c).parents.includes(sid));
+      kids.forEach(c => claimed.add(c));
+      if (kids.length) block.unions.push({ partner: sid, kids });
+    }
+    const single = p.children.filter(c => !claimed.has(c));
+    if (single.length) block.unions.push({ partner: null, kids: single });
+    for (const u of block.unions) {
+      u.kids = u.kids.filter(c => !placed.has(c) || blockOf.get(c)?.pid === c);
+      for (const c of u.kids) if (!placed.has(c)) block.blockChildren.push(makeBlock(c, level + 1));
+    }
+    return block;
+  }
+
+  const minGen = Math.min(...DATA.persons.map(p => p.gen ?? 1));
+  const ordered = [...people.values()].sort((a, b) => (a.gen ?? 99) - (b.gen ?? 99) || a.id - b.id);
+  for (const p of ordered) {
+    if (placed.has(p.id) || p.parents.length) continue;
+    // Married-in people with no parents are drawn next to their spouse.
+    if (p.spouses.some(s => P(s).parents.length)) continue;
+    roots.push(makeBlock(p.id, (p.gen ?? minGen) - minGen));
+  }
+  for (const p of ordered) if (!placed.has(p.id)) roots.push(makeBlock(p.id, (p.gen ?? minGen) - minGen));
+
+  // ---------- Branches (colours) ----------
+  // Each line starting in the second generation gets its own colour.
+  const branches = [];
+  const branchOf = new Map();
+  function paint(block, branch) {
+    for (const id of [block.pid, ...block.spouses]) branchOf.set(id, branch);
+    block.blockChildren.forEach(b => paint(b, branch));
+  }
+  for (const r of roots) {
+    if (r.level === 0 && r.blockChildren.length) {
+      for (const id of [r.pid, ...r.spouses]) branchOf.set(id, null);
+      for (const c of r.blockChildren) {
+        const br = { id: branches.length, head: c.pid, color: PALETTE[branches.length % PALETTE.length] };
+        branches.push(br); paint(c, br);
+      }
+    } else {
+      const br = { id: branches.length, head: r.pid, color: PALETTE[branches.length % PALETTE.length] };
+      branches.push(br); paint(r, br);
+    }
+  }
+  const isInlaw = id => {
+    const b = blockOf.get(id);
+    return b && b.pid !== id;
+  };
+
+  // ---------- Layout ----------
+  const collapsed = new Set();
+  let pos = new Map();     // person id -> {x, y} (top-left of card)
+  let visible = [];        // visible blocks
+
+  function rowOrder(block) {
+    const s = block.spouses;
+    if (s.length === 2) return [s[0], block.pid, s[1]];
+    return [block.pid, ...s];
+  }
+  function rowWidth(block) {
+    const n = rowOrder(block).length;
+    return n * W + (n - 1) * GAP_COUPLE;
+  }
+  function kidsOf(block) { return collapsed.has(block.pid) ? [] : block.blockChildren; }
+  function measure(block) {
+    const kids = kidsOf(block);
+    const kw = kids.reduce((s, k) => s + measure(k), 0) + Math.max(0, kids.length - 1) * GAP_SIBLING;
+    block.kidsWidth = kw;
+    block.width = Math.max(rowWidth(block), kw);
+    return block.width;
+  }
+  function place(block, left) {
+    visible.push(block);
+    const kids = kidsOf(block);
+    const y = block.level * ROW;
+    let x = left + (block.width - block.kidsWidth) / 2;
+    for (const k of kids) { place(k, x); x += k.width + GAP_SIBLING; }
+    // Centre the couple above its children (or inside its own width when it has none).
+    let center = left + block.width / 2;
+    if (kids.length) {
+      const first = pos.get(kids[0].pid), last = pos.get(kids[kids.length - 1].pid);
+      center = (first.x + last.x + W) / 2;
+    }
+    const order = rowOrder(block);
+    const rw = rowWidth(block);
+    let rx = Math.min(Math.max(center - rw / 2, left), left + block.width - rw);
+    for (const id of order) { pos.set(id, { x: rx, y }); rx += W + GAP_COUPLE; }
+  }
+  function layout() {
+    pos = new Map(); visible = [];
+    let x = BAND_LABEL;
+    for (const r of roots) { measure(r); place(r, x); x += r.width + GAP_TREE; }
+  }
+
+  // ---------- Rendering ----------
+  const svg = document.getElementById("tree");
+  const vp = document.getElementById("viewport");
+  const el = (tag, attrs = {}, parent) => {
+    const n = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    if (parent) parent.appendChild(n);
+    return n;
+  };
+  const nodeEls = new Map();
+  const toggleEls = new Map();
+  let linkEls = [];        // {el, ids:[...]} - highlighted when all ids are highlighted
+
+  function descendantsCount(block) {
+    return block.blockChildren.reduce((s, b) => s + 1 + b.spouses.length + descendantsCount(b), 0);
+  }
+
+  function render() {
+    layout();
+    vp.textContent = "";
+    nodeEls.clear(); toggleEls.clear(); linkEls = [];
+    const bounds = bbox();
+
+    // Generation bands
+    const bands = el("g", { class: "gen-band" }, vp);
+    const levels = [...new Set(visible.map(b => b.level))].sort((a, b) => a - b);
+    levels.forEach(l => {
+      const y = l * ROW;
+      if (l % 2 === 0) el("rect", { x: bounds.x - BAND_LABEL, y: y - (ROW - H) / 2, width: bounds.w + BAND_LABEL + 40, height: ROW }, bands);
+      const t = el("text", { x: bounds.x - BAND_LABEL + 10, y: y + H / 2 + 4 }, bands);
+      t.textContent = `Gen. ${l + minGen}`;
+    });
+
+    const links = el("g", {}, vp);
+    const nodes = el("g", {}, vp);
+
+    for (const b of visible) {
+      const pp = pos.get(b.pid);
+      // Marriage lines (to spouses drawn in this block, or to spouses drawn elsewhere)
+      for (const sid of P(b.pid).spouses) {
+        const sp = pos.get(sid);
+        if (!sp) continue;
+        const [l, r] = pp.x < sp.x ? [pp, sp] : [sp, pp];
+        let d;
+        if (l.y === r.y && blockOf.get(sid) === b) d = `M${l.x + W},${l.y + H / 2}H${r.x}`;
+        else if (b.pid < sid || blockOf.get(sid) === b) continue; // drawn once from the other side
+        else d = `M${pp.x + W / 2},${pp.y}C${pp.x + W / 2},${pp.y - 50} ${sp.x + W / 2},${sp.y - 50} ${sp.x + W / 2},${sp.y}`;
+        const e = el("path", { d, class: "link marriage" + (blockOf.get(sid) === b ? "" : " far") }, links);
+        if (blockOf.get(sid) !== b) e.setAttribute("stroke-dasharray", "5 4");
+        linkEls.push({ el: e, ids: [b.pid, sid] });
+      }
+      // Parent → children connectors
+      if (collapsed.has(b.pid)) continue;
+      for (const u of b.unions) {
+        const kids = u.kids.filter(c => pos.has(c) && blockOf.get(c)?.pid === c);
+        if (!kids.length) continue;
+        const sp = u.partner != null ? pos.get(u.partner) : null;
+        let sx, sy;
+        if (sp && sp.y === pp.y) {
+          const [l, r] = pp.x < sp.x ? [pp, sp] : [sp, pp];
+          sx = (l.x + W + r.x) / 2; sy = pp.y + H / 2;
+        } else { sx = pp.x + W / 2; sy = pp.y + H; }
+        const barY = pp.y + H + (ROW - H) / 2;
+        const parents = [b.pid, ...(u.partner != null ? [u.partner] : [])];
+        const stem = el("path", { d: `M${sx},${sy}V${barY}`, class: "link" }, links);
+        linkEls.push({ el: stem, ids: parents, any: kids });
+        for (const c of kids) {
+          const cp = pos.get(c);
+          const cx = cp.x + W / 2;
+          const e = el("path", { d: `M${sx},${barY}H${cx}V${cp.y}`, class: "link" }, links);
+          linkEls.push({ el: e, ids: [...parents, c] });
+        }
+      }
+    }
+
+    for (const b of visible) {
+      for (const id of rowOrder(b)) drawPerson(id, nodes);
+      if (b.blockChildren.length) {
+        const pp = pos.get(b.pid);
+        const g = el("g", { class: "toggle", transform: `translate(${pp.x + W / 2},${pp.y + H + 14})` }, nodes);
+        const isC = collapsed.has(b.pid);
+        el("circle", { r: isC ? 13 : 9 }, g);
+        const t = el("text", { "text-anchor": "middle", y: 4 }, g);
+        t.textContent = isC ? `+${descendantsCount(b)}` : "−";
+        el("title", {}, g).textContent = isC ? "Mostra discendenti" : "Nascondi discendenti";
+        g.addEventListener("click", ev => { ev.stopPropagation(); toggle(b.pid); });
+        toggleEls.set(b.pid, g);
+      }
+    }
+    applyHighlight();
+  }
+
+  function drawPerson(id, parent) {
+    const p = P(id), xy = pos.get(id);
+    const br = branchOf.get(id);
+    const g = el("g", { class: "person" + (isInlaw(id) ? " inlaw" : ""), transform: `translate(${xy.x},${xy.y})`, tabindex: 0, role: "button" }, parent);
+    el("rect", { class: "card", width: W, height: H, rx: 9 }, g);
+    if (br) el("rect", { width: 6, height: H, fill: br.color, "clip-path": "url(#card-clip)" }, g);
+    const hasNick = !!p.soprannome;
+    const t1 = el("text", { class: "name", x: 16, y: hasNick ? 20 : 25 }, g);
+    t1.textContent = fit(p.nome, 16);
+    const t2 = el("text", { class: "surname", x: 16, y: hasNick ? 35 : 42 }, g);
+    t2.textContent = fit(p.cognome, 20);
+    if (hasNick) {
+      const t3 = el("text", { class: "nick", x: 16, y: 50 }, g);
+      t3.textContent = `“${fit(p.soprannome, 18)}”`;
+    }
+    el("title", {}, g).textContent = fullName(p) + (hasNick ? ` (“${p.soprannome}”)` : "");
+    g.addEventListener("click", ev => { ev.stopPropagation(); select(id); });
+    g.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select(id); } });
+    nodeEls.set(id, g);
+  }
+  const fit = (s, n) => (s && s.length > n ? s.slice(0, n - 1) + "…" : s || "");
+
+  function bbox() {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const { x, y } of pos.values()) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + W); y1 = Math.max(y1, y + H); }
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  // ---------- Collapse ----------
+  function toggle(pid) {
+    const anchor = pos.get(pid);
+    const before = anchor && toScreen(anchor.x, anchor.y);
+    collapsed.has(pid) ? collapsed.delete(pid) : collapsed.add(pid);
+    render();
+    // Keep the toggled card where it was on screen
+    const after = pos.get(pid);
+    if (before && after) {
+      view.x += before.x - (after.x * view.k + view.x);
+      view.y += before.y - (after.y * view.k + view.y);
+      applyView();
+    }
+  }
+  function expandTo(id) {
+    // Make sure every ancestor of the person is expanded
+    let changed = false;
+    const stack = [id];
+    const seen = new Set();
+    while (stack.length) {
+      const cur = stack.pop();
+      if (seen.has(cur)) continue; seen.add(cur);
+      const b = blockOf.get(cur);
+      if (!b) continue;
+      for (const par of P(b.pid).parents) {
+        const pb = blockOf.get(par);
+        if (pb && collapsed.has(pb.pid)) { collapsed.delete(pb.pid); changed = true; }
+        stack.push(par);
+      }
+    }
+    if (changed) render();
+  }
+
+  // ---------- Selection & highlight ----------
+  let selected = null, branchFocus = null;
+  function lineage(id) {
+    const set = new Set([id]);
+    const up = [id];
+    while (up.length) for (const par of P(up.pop()).parents) if (!set.has(par)) { set.add(par); up.push(par); }
+    const down = [id];
+    while (down.length) for (const c of P(down.pop()).children) if (!set.has(c)) { set.add(c); down.push(c); }
+    for (const s of P(id).spouses) set.add(s);
+    return set;
+  }
+  function applyHighlight() {
+    let set = null;
+    if (selected != null) set = lineage(selected);
+    else if (branchFocus != null) set = new Set([...branchOf].filter(([, b]) => b && b.id === branchFocus).map(([id]) => id));
+    for (const [id, g] of nodeEls) {
+      g.classList.toggle("dim", !!set && !set.has(id));
+      g.classList.toggle("selected", id === selected);
+    }
+    for (const [id, g] of toggleEls) g.classList.toggle("dim", !!set && !set.has(id));
+    for (const l of linkEls) {
+      const on = !!set && l.ids.every(i => set.has(i)) && (!l.any || l.any.some(i => set.has(i)));
+      l.el.classList.toggle("hl", on && selected != null);
+      l.el.classList.toggle("dim", !!set && !on);
+    }
+  }
+  function select(id, { center = false } = {}) {
+    selected = id; branchFocus = null;
+    expandTo(id);
+    applyHighlight();
+    showPanel(id);
+    if (center) centerOn(id);
+  }
+  function clearSelection() {
+    selected = null; branchFocus = null;
+    applyHighlight();
+    panel.classList.remove("open");
+  }
+
+  // ---------- Details panel ----------
+  const panel = document.getElementById("panel");
+  function siblingsOf(p) {
+    const s = new Set();
+    for (const par of p.parents) for (const c of P(par).children) if (c !== p.id) s.add(c);
+    return [...s].sort((a, b) => a - b);
+  }
+  function listHtml(title, ids, note) {
+    const items = ids.map(i => {
+      const q = P(i);
+      const extra = note ? note(q) : "";
+      return `<li><a href="#" data-id="${i}">${esc(fullName(q))}${q.soprannome ? ` <small>“${esc(q.soprannome)}”</small>` : ""}${extra ? ` <small>· ${esc(extra)}</small>` : ""}</a></li>`;
+    }).join("");
+    return `<h3>${title}</h3>${ids.length ? `<ul>${items}</ul>` : `<div class="empty">Nessuno registrato</div>`}`;
+  }
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  function showPanel(id) {
+    const p = P(id);
+    const br = branchOf.get(id);
+    const otherParent = c => {
+      const o = P(c).parents.find(x => x !== id);
+      return o != null && p.spouses.length > 1 ? `con ${P(o).nome}` : "";
+    };
+    panel.innerHTML = `
+      <button class="close" title="Chiudi" aria-label="Chiudi">✕</button>
+      <h2>${esc(fullName(p))}</h2>
+      ${p.soprannome ? `<div class="nick">“${esc(p.soprannome)}”</div>` : ""}
+      <div class="meta">${br ? `<span class="sw" style="background:${br.color}"></span>Ramo di ${esc(fullName(P(br.head)))} ·` : ""} Generazione ${p.gen ?? "?"}${isInlaw(id) ? " · acquisito/a" : ""}</div>
+      ${listHtml("Genitori", p.parents)}
+      ${listHtml(p.spouses.length > 1 ? "Coniugi" : "Coniuge", p.spouses)}
+      ${listHtml("Figli", p.children, q => otherParent(q.id))}
+      ${listHtml("Fratelli e sorelle", siblingsOf(p))}
+      <div class="actions">
+        <button data-act="center">Centra</button>
+        ${blockOf.get(id)?.pid === id && blockOf.get(id).blockChildren.length ? `<button data-act="toggle">${collapsed.has(id) ? "Mostra" : "Nascondi"} discendenti</button>` : ""}
+      </div>`;
+    panel.classList.add("open");
+  }
+  panel.addEventListener("click", ev => {
+    const a = ev.target.closest("a[data-id]");
+    if (a) { ev.preventDefault(); select(+a.dataset.id, { center: true }); return; }
+    if (ev.target.closest(".close")) { clearSelection(); return; }
+    const act = ev.target.closest("[data-act]")?.dataset.act;
+    if (act === "center") centerOn(selected);
+    if (act === "toggle") { toggle(selected); select(selected); }
+  });
+
+  // ---------- Legend ----------
+  const legend = document.getElementById("legend");
+  legend.innerHTML = `<h2>Rami della famiglia</h2><ul>${branches.map(b =>
+    `<li data-branch="${b.id}"><span class="sw" style="background:${b.color}"></span>${esc(fullName(P(b.head)))}</li>`).join("")}
+    <li data-branch="none"><span class="sw inlaw-sw"></span>Acquisiti</li></ul>`;
+  legend.addEventListener("click", ev => {
+    const li = ev.target.closest("li[data-branch]");
+    if (!li || li.dataset.branch === "none") return;
+    const id = +li.dataset.branch;
+    selected = null; panel.classList.remove("open");
+    branchFocus = branchFocus === id ? null : id;
+    if (branchFocus != null) {
+      // Open the whole branch and frame it
+      const ids = [...branchOf].filter(([, b]) => b && b.id === id).map(([i]) => i);
+      for (const i of ids) collapsed.delete(i);
+      render();
+      fitTo(ids, 1);
+    } else applyHighlight();
+  });
+
+  // ---------- Pan & zoom ----------
+  const view = { x: 0, y: 0, k: 1 };
+  const applyView = () => vp.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`);
+  const toScreen = (x, y) => ({ x: x * view.k + view.x, y: y * view.k + view.y });
+  const clampK = k => Math.min(2.5, Math.max(0.15, k));
+  function zoomAt(factor, sx, sy) {
+    const k = clampK(view.k * factor);
+    view.x = sx - (sx - view.x) * (k / view.k);
+    view.y = sy - (sy - view.y) * (k / view.k);
+    view.k = k; applyView();
+  }
+  function fitTo(ids, maxK = 1.2) {
+    const r = svg.getBoundingClientRect();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const id of ids) { const p = pos.get(id); if (!p) continue; x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x + W); y1 = Math.max(y1, p.y + H); }
+    if (!isFinite(x0)) return;
+    const pad = 40;
+    const k = clampK(Math.min((r.width - pad * 2) / (x1 - x0), (r.height - pad * 2) / (y1 - y0), maxK));
+    view.k = k;
+    view.x = (r.width - (x1 - x0) * k) / 2 - x0 * k;
+    view.y = (r.height - (y1 - y0) * k) / 2 - y0 * k;
+    applyView();
+  }
+  function fitAll() {
+    const r = svg.getBoundingClientRect();
+    const b = bbox();
+    const k = clampK(Math.min((r.width - 60) / (b.w + BAND_LABEL), (r.height - 60) / b.h, 1.1));
+    // Keep cards readable: when the whole tree would be tiny, show its top-left corner instead.
+    if (k < 0.55) {
+      view.k = 0.6;
+      view.x = 16 - (b.x - BAND_LABEL) * view.k;
+      view.y = 24 - b.y * view.k;
+      applyView();
+      return;
+    }
+    view.k = k;
+    view.x = (r.width - (b.w + BAND_LABEL) * k) / 2 - (b.x - BAND_LABEL) * k;
+    view.y = (r.height - b.h * k) / 2 - b.y * k;
+    applyView();
+  }
+  function centerOn(id) {
+    const p = pos.get(id); if (!p) return;
+    const r = svg.getBoundingClientRect();
+    const k = Math.max(view.k, 0.8);
+    const open = panel.classList.contains("open");
+    // Keep the person visible next to the details panel (side panel on desktop, bottom sheet on phones)
+    const dx = open && r.width > 640 ? panel.offsetWidth / 2 + 8 : 0;
+    const dy = open && r.width <= 640 ? panel.offsetHeight / 2 : 0;
+    const target = { k, x: r.width / 2 - dx - (p.x + W / 2) * k, y: r.height / 2 - dy - (p.y + H / 2) * k };
+    animateTo(target);
+  }
+  function animateTo(t) {
+    const s = { ...view }, start = performance.now(), dur = 350;
+    const step = now => {
+      const f = Math.min(1, (now - start) / dur), e = 1 - Math.pow(1 - f, 3);
+      view.x = s.x + (t.x - s.x) * e; view.y = s.y + (t.y - s.y) * e; view.k = s.k + (t.k - s.k) * e;
+      applyView();
+      if (f < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  const pointers = new Map();
+  let dragMoved = false, pinchDist = 0, downAt = null;
+  svg.addEventListener("pointerdown", ev => {
+    pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (pointers.size === 1) { dragMoved = false; downAt = { x: ev.clientX, y: ev.clientY }; }
+    if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinchDist = Math.hypot(a.x - b.x, a.y - b.y); }
+  });
+  svg.addEventListener("pointermove", ev => {
+    const prev = pointers.get(ev.pointerId);
+    if (!prev) return;
+    const cur = { x: ev.clientX, y: ev.clientY };
+    if (!dragMoved) {
+      if (Math.hypot(cur.x - downAt.x, cur.y - downAt.y) < 4 && pointers.size === 1) return;
+      // Capture only once a real drag starts, so plain clicks still reach the cards
+      dragMoved = true;
+      svg.classList.add("dragging");
+      for (const id of pointers.keys()) try { svg.setPointerCapture(id); } catch (e) {}
+    }
+    pointers.set(ev.pointerId, cur);
+    if (pointers.size === 1) {
+      view.x += cur.x - prev.x; view.y += cur.y - prev.y; applyView();
+    } else if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      const r = svg.getBoundingClientRect();
+      if (pinchDist) zoomAt(d / pinchDist, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+      pinchDist = d;
+    }
+  });
+  const endPointer = ev => { pointers.delete(ev.pointerId); if (pointers.size < 2) pinchDist = 0; if (!pointers.size) svg.classList.remove("dragging"); };
+  svg.addEventListener("pointerup", endPointer);
+  svg.addEventListener("pointercancel", endPointer);
+  // A click that was really a drag must not select or deselect
+  svg.addEventListener("click", ev => { if (dragMoved) { ev.stopPropagation(); dragMoved = false; } }, true);
+  svg.addEventListener("click", () => clearSelection());
+  svg.addEventListener("wheel", ev => {
+    ev.preventDefault();
+    const r = svg.getBoundingClientRect();
+    if (ev.ctrlKey || Math.abs(ev.deltaY) >= Math.abs(ev.deltaX)) {
+      zoomAt(Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0015)), ev.clientX - r.left, ev.clientY - r.top);
+    } else { view.x -= ev.deltaX; applyView(); }
+  }, { passive: false });
+
+  const rectCenter = () => { const r = svg.getBoundingClientRect(); return [r.width / 2, r.height / 2]; };
+  document.getElementById("zoom-in").onclick = () => zoomAt(1.25, ...rectCenter());
+  document.getElementById("zoom-out").onclick = () => zoomAt(0.8, ...rectCenter());
+  document.getElementById("fit").onclick = () => fitAll();
+  document.getElementById("expand-all").onclick = () => { collapsed.clear(); render(); fitAll(); };
+  function collapseAll() {
+    collapsed.clear();
+    for (const b of blockOf.values()) if (b.level >= 1 && b.blockChildren.length) collapsed.add(b.pid);
+  }
+  document.getElementById("collapse-all").onclick = () => {
+    collapseAll();
+    if (selected != null) { selected = null; panel.classList.remove("open"); }
+    render(); fitAll();
+  };
+
+  // ---------- Search ----------
+  const input = document.getElementById("search");
+  const results = document.getElementById("results");
+  const norm = s => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  let hits = [], active = 0;
+  function runSearch() {
+    const q = norm(input.value).trim();
+    for (const g of nodeEls.values()) g.classList.remove("match");
+    if (!q) { results.classList.remove("open"); hits = []; return; }
+    const terms = q.split(/\s+/);
+    hits = [...people.values()].filter(p => {
+      const hay = norm(`${p.nome} ${p.cognome} ${p.soprannome || ""}`);
+      return terms.every(t => hay.includes(t));
+    }).slice(0, 30);
+    active = 0;
+    results.innerHTML = hits.length
+      ? hits.map((p, i) => `<li data-id="${p.id}" class="${i === 0 ? "active" : ""}">${esc(fullName(p))}${p.soprannome ? ` <small>“${esc(p.soprannome)}”</small>` : ""} <small>· gen. ${p.gen ?? "?"}</small></li>`).join("")
+      : `<li><small>Nessun risultato</small></li>`;
+    results.classList.add("open");
+    for (const p of hits) nodeEls.get(p.id)?.classList.add("match");
+  }
+  function choose(id) {
+    results.classList.remove("open");
+    input.value = fullName(P(id));
+    for (const g of nodeEls.values()) g.classList.remove("match");
+    select(id, { center: true });
+    input.blur();
+  }
+  input.addEventListener("input", runSearch);
+  input.addEventListener("focus", () => { if (input.value) runSearch(); });
+  input.addEventListener("keydown", ev => {
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      if (!hits.length) return;
+      active = (active + (ev.key === "ArrowDown" ? 1 : hits.length - 1)) % hits.length;
+      [...results.children].forEach((li, i) => li.classList.toggle("active", i === active));
+    } else if (ev.key === "Enter" && hits[active]) choose(hits[active].id);
+    else if (ev.key === "Escape") { input.value = ""; runSearch(); input.blur(); }
+  });
+  results.addEventListener("mousedown", ev => { const li = ev.target.closest("li[data-id]"); if (li) { ev.preventDefault(); choose(+li.dataset.id); } });
+  input.addEventListener("blur", () => setTimeout(() => results.classList.remove("open"), 100));
+  document.addEventListener("keydown", ev => {
+    if (ev.key === "/" && document.activeElement !== input) { ev.preventDefault(); input.focus(); }
+    if (ev.key === "Escape" && document.activeElement !== input) clearSelection();
+  });
+
+  // ---------- Start ----------
+  document.getElementById("title").textContent = DATA.title || "Albero Genealogico";
+  document.title = DATA.title || document.title;
+  const gens = new Set(DATA.persons.map(p => p.gen)).size;
+  document.getElementById("stats").textContent = `${people.size} persone · ${gens} generazioni`;
+  // Start from an overview of the family branches; each "+N" button opens a branch.
+  collapseAll();
+  render();
+  fitAll();
+})();
+</script>
+</body>
+</html>

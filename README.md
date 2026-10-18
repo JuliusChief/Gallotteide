@@ -2,10 +2,10 @@
 
 Interactive family tree of the Gallotta family.
 
-Open `docs/index.html` in a browser (double-click works, no server needed) to explore the tree:
+Open `docs/index.html` in a browser (double-click works, no server needed) to explore the tree. It is drawn like a real tree: the oldest generation sits on the trunk at the bottom, and each generation grows upwards on tapering branches with leaves.
 
 - **Overview first**: the tree opens on the first two generations, one coloured branch per line of descendants. Click a `+N` button under a couple to open that branch, `−` to close it again.
-- **Click a person** to see their parents, spouses, children and siblings, and to highlight their whole line (ancestors and descendants). Names in the panel are links.
+- **Click a person** to see their parents, spouses, children and siblings, and to highlight their whole line (ancestors and descendants) in gold. Names in the panel are links.
 - **Search** by first name, surname or nickname (press `/` to jump to the search box).
 - **Legend**: click a branch to open and frame it.
 - **Navigate** by dragging, scrolling or pinching to zoom; the buttons bottom-left zoom, fit the tree, expand everything or go back to the overview.

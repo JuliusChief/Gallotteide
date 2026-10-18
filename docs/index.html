@@ -16,6 +16,20 @@
     --accent: #b5532f;
     --shadow: 0 1px 2px rgba(0,0,0,.08), 0 2px 8px rgba(0,0,0,.06);
     --dim: .18;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sky-top: #eef4ee;
+    --sky-bottom: #f8f3e6;
+    --meadow: #cfdcae;
+    --wood: #8a6440;
+    --wood-edge: #6f4f31;
+    --wood-hl: #c0862f;
+    --wood-hl-edge: #9a6a20;
+    --leaf-0: #6f9f4a;
+    --leaf-1: #4f8a3c;
+    --leaf-2: #8fb85a;
+    --leaf-hl: #d9a43a;
+    --heart: #c4573f;
+    --card-edge: #d8ccb4;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -29,6 +43,19 @@
       --accent: #e4875f;
       --shadow: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.3);
       --dim: .22;
+      --sky-top: #141b22;
+      --sky-bottom: #1f1d1a;
+      --meadow: #2c3a24;
+      --wood: #7a5a3c;
+      --wood-edge: #5a3f27;
+      --wood-hl: #d39a43;
+      --wood-hl-edge: #a87425;
+      --leaf-0: #4f7d38;
+      --leaf-1: #3d6b2f;
+      --leaf-2: #6e9a45;
+      --leaf-hl: #e0ad4a;
+      --heart: #d9735b;
+      --card-edge: #4a4238;
     }
   }
   * { box-sizing: border-box; }
@@ -51,7 +78,8 @@
     flex-wrap: wrap;
     z-index: 3;
   }
-  header h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
+  header h1 { font: 600 20px/1.2 var(--serif); margin: 0; letter-spacing: -.01em; }
+  header h1::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 8px; background: var(--leaf-1); border-radius: 0 80% 0 80%; vertical-align: -1px; }
   header .stats { color: var(--muted); font-size: 13px; }
   .search { position: relative; margin-left: auto; flex: 0 1 280px; min-width: 180px; }
   .search input {
@@ -74,25 +102,35 @@
   .results li small { color: var(--muted); }
   .results li.active, .results li:hover { background: var(--surface-2); }
 
-  main { position: relative; flex: 1; min-height: 0; }
+  main { position: relative; flex: 1; min-height: 0; background: linear-gradient(var(--sky-top), var(--sky-bottom)); }
   #tree { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; user-select: none; }
   #tree.dragging { cursor: grabbing; }
 
   .gen-band text { fill: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
-  .gen-band rect { fill: var(--surface-2); opacity: .45; }
 
-  .link { fill: none; stroke: var(--line); stroke-width: 1.5; transition: opacity .2s, stroke .2s; }
-  .link.marriage { stroke: var(--line-strong); stroke-width: 2; }
-  .link.hl { stroke: var(--accent); stroke-width: 2.5; }
+  .meadow { fill: var(--meadow); }
+  .bark { fill: var(--wood); stroke: var(--wood-edge); stroke-width: 1; stroke-linejoin: round; }
+  .vine { fill: none; stroke: var(--wood); stroke-width: 4; stroke-linecap: round; }
+  .vine.far { stroke-dasharray: 6 5; stroke-width: 2.5; }
+  .heart { fill: var(--heart); }
+  .leaf path:first-child { stroke: rgba(0,0,0,.12); stroke-width: .6; }
+  .leaf.l0 path:first-child { fill: var(--leaf-0); }
+  .leaf.l1 path:first-child { fill: var(--leaf-1); }
+  .leaf.l2 path:first-child { fill: var(--leaf-2); }
+  .vein { fill: none; stroke: rgba(255,255,255,.45); stroke-width: .9; stroke-linecap: round; }
+  .branch { transition: opacity .2s; }
+  .branch.hl .bark { fill: var(--wood-hl); stroke: var(--wood-hl-edge); }
+  .branch.hl .vine { stroke: var(--wood-hl); }
+  .branch.hl .leaf path:first-child { fill: var(--leaf-hl); }
 
   .person { cursor: pointer; transition: opacity .2s; }
-  .person .card { fill: var(--surface); stroke: var(--line); stroke-width: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,.12)); }
+  .person .card { fill: var(--surface); stroke: var(--card-edge); stroke-width: 1.2; filter: drop-shadow(0 2px 3px rgba(40,30,10,.18)); }
   .person.inlaw .card { fill: var(--surface-2); }
-  .person .stripe { stroke: none; }
-  .person .name { fill: var(--text); font-weight: 600; font-size: 13.5px; }
+  .person .badge { stroke: rgba(0,0,0,.15); stroke-width: .6; }
+  .person .name { fill: var(--text); font: 600 14px/1 var(--serif); }
   .person .surname { fill: var(--muted); font-size: 12px; }
   .person .nick { fill: var(--accent); font-size: 11.5px; font-style: italic; }
-  .person:hover .card { stroke: var(--line-strong); }
+  .person:hover .card { stroke: var(--wood); }
   .person:focus { outline: none; }
   .person:focus-visible .card { stroke: var(--accent); stroke-width: 2; }
   .person.selected .card { stroke: var(--accent); stroke-width: 3; }
@@ -100,9 +138,11 @@
   .dim { opacity: var(--dim); }
 
   .toggle { cursor: pointer; }
-  .toggle circle { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.2; }
+  .toggle circle { fill: var(--surface); stroke: var(--wood); stroke-width: 1.5; }
+  .toggle.closed circle { fill: var(--leaf-1); stroke: var(--leaf-2); }
   .toggle text { fill: var(--text); font-size: 12px; font-weight: 700; }
-  .toggle:hover circle { fill: var(--surface-2); }
+  .toggle.closed text { fill: #fff; }
+  .toggle:hover circle { filter: brightness(1.08); }
 
   .controls {
     position: absolute; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 2;
@@ -116,15 +156,15 @@
   .controls .sep { height: 4px; }
 
   .legend {
-    position: absolute; left: 64px; bottom: 16px; z-index: 2;
+    position: absolute; left: 16px; top: 16px; z-index: 2;
     background: var(--surface); border-radius: 10px; box-shadow: var(--shadow);
-    padding: 8px 10px; max-width: calc(100% - 96px);
+    padding: 8px 10px; max-width: min(560px, calc(100% - 360px));
   }
   .legend h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 4px; }
   .legend ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 10px; }
   .legend li { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 2px 4px; border-radius: 6px; }
   .legend li:hover { background: var(--surface-2); }
-  .legend .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend .sw, .panel .meta .sw { width: 11px; height: 11px; border-radius: 0 80% 0 80%; flex: none; }
   .legend .inlaw-sw { background: var(--surface-2); border: 1px solid var(--line); }
 
   .panel {
@@ -134,10 +174,9 @@
   }
   .panel.open { display: block; }
   .panel .close { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; font-size: 16px; box-shadow: none; border: none; }
-  .panel h2 { margin: 0 32px 2px 0; font-size: 20px; line-height: 1.2; }
+  .panel h2 { margin: 0 32px 2px 0; font: 600 22px/1.2 var(--serif); }
   .panel .nick { color: var(--accent); font-style: italic; margin-bottom: 4px; }
   .panel .meta { color: var(--muted); font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-  .panel .meta .sw { width: 10px; height: 10px; border-radius: 3px; }
   .panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 0 4px; }
   .panel ul { list-style: none; margin: 0; padding: 0; }
   .panel li a { display: block; padding: 4px 6px; margin: 0 -6px; border-radius: 6px; color: var(--text); text-decoration: none; }
@@ -173,7 +212,6 @@
 </header>
 <main>
   <svg id="tree" aria-label="Albero genealogico">
-    <defs><clipPath id="card-clip"><rect width="150" height="58" rx="9"/></clipPath></defs>
     <g id="viewport"></g>
   </svg>
   <div class="controls">
@@ -195,7 +233,7 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
 
   // Card and spacing sizes (SVG units)
-  const W = 150, H = 58, GAP_COUPLE = 18, GAP_SIBLING = 26, GAP_TREE = 70, ROW = 140, BAND_LABEL = 110;
+  const W = 150, H = 58, GAP_COUPLE = 18, GAP_SIBLING = 26, GAP_TREE = 110, ROW = 170, BAND_LABEL = 110;
   const PALETTE = ["#c4572f", "#2f7fb5", "#3c9a5f", "#8a5bb8", "#c9952b", "#c2477f", "#2a9d9d", "#7a8a2a"];
 
   // ---------- Data model ----------
@@ -313,7 +351,7 @@
   function place(block, left) {
     visible.push(block);
     const kids = kidsOf(block);
-    const y = block.level * ROW;
+    const y = levelY(block.level);
     let x = left + (block.width - block.kidsWidth) / 2;
     for (const k of kids) { place(k, x); x += k.width + GAP_SIBLING; }
     // Centre the couple above its children (or inside its own width when it has none).
@@ -327,6 +365,9 @@
     let rx = Math.min(Math.max(center - rw / 2, left), left + block.width - rw);
     for (const id of order) { pos.set(id, { x: rx, y }); rx += W + GAP_COUPLE; }
   }
+  // The tree grows upwards: the oldest generation sits at the bottom, on the trunk.
+  const maxLevel = Math.max(...[...blockOf.values()].map(b => b.level));
+  const levelY = l => (maxLevel - l) * ROW;
   function layout() {
     pos = new Map(); visible = [];
     let x = BAND_LABEL;
@@ -350,61 +391,174 @@
     return block.blockChildren.reduce((s, b) => s + 1 + b.spouses.length + descendantsCount(b), 0);
   }
 
+  // ---------- Botanical drawing helpers ----------
+  // Deterministic pseudo-random numbers, so leaves don't move between renders.
+  function rng(seed) {
+    let s = (seed * 2654435761) >>> 0 || 1;
+    return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  }
+  const bez = (p, t) => {
+    const u = 1 - t;
+    return {
+      x: u * u * u * p[0].x + 3 * u * u * t * p[1].x + 3 * u * t * t * p[2].x + t * t * t * p[3].x,
+      y: u * u * u * p[0].y + 3 * u * u * t * p[1].y + 3 * u * t * t * p[2].y + t * t * t * p[3].y,
+    };
+  };
+  const bezTan = (p, t) => {
+    const u = 1 - t;
+    const x = 3 * u * u * (p[1].x - p[0].x) + 6 * u * t * (p[2].x - p[1].x) + 3 * t * t * (p[3].x - p[2].x);
+    const y = 3 * u * u * (p[1].y - p[0].y) + 6 * u * t * (p[2].y - p[1].y) + 3 * t * t * (p[3].y - p[2].y);
+    const l = Math.hypot(x, y) || 1;
+    return { x: x / l, y: y / l };
+  };
+  // A filled, tapering shape along a cubic curve: wide at the base, thin at the tip.
+  function taper(p, w0, w1, steps = 22) {
+    const left = [], right = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps, q = bez(p, t), d = bezTan(p, t);
+      const w = (w0 + (w1 - w0) * Math.pow(t, 0.8)) / 2;
+      left.push(`${(q.x - d.y * w).toFixed(1)},${(q.y + d.x * w).toFixed(1)}`);
+      right.push(`${(q.x + d.y * w).toFixed(1)},${(q.y - d.x * w).toFixed(1)}`);
+    }
+    return `M${left.join("L")}L${right.reverse().join("L")}Z`;
+  }
+  const LEAF = "M0,0 C5,-7 15,-8 22,0 C15,8 5,7 0,0Z";
+  function leaf(parent, x, y, angle, scale, shade) {
+    const g = el("g", { class: `leaf l${shade}`, transform: `translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${angle.toFixed(0)}) scale(${scale.toFixed(2)})` }, parent);
+    el("path", { d: LEAF }, g);
+    el("path", { d: "M1,0 Q11,-1 20,0", class: "vein" }, g);
+  }
+  // Leaves sprouting along a branch, alternating sides and pointing towards the tip
+  function leavesAlong(parent, p, seed, count) {
+    const r = rng(seed);
+    for (let i = 0; i < count; i++) {
+      const t = 0.28 + (i + r() * 0.6) / count * 0.6;
+      const q = bez(p, t), d = bezTan(p, t);
+      const side = i % 2 ? 1 : -1;
+      const base = Math.atan2(d.y, d.x) * 180 / Math.PI;
+      leaf(parent, q.x, q.y, base + side * (38 + r() * 22), 0.75 + r() * 0.45, Math.floor(r() * 3));
+    }
+  }
+  // A small crown of leaves above a person with no descendants: the tips of the tree
+  function crown(parent, x, y, seed) {
+    const r = rng(seed);
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      const a = -160 + (i / (n - 1)) * 140 + (r() - 0.5) * 14;
+      leaf(parent, x + (r() - 0.5) * 30, y + 4, a, 0.8 + r() * 0.5, Math.floor(r() * 3));
+    }
+  }
+
   function render() {
     layout();
     vp.textContent = "";
     nodeEls.clear(); toggleEls.clear(); linkEls = [];
     const bounds = bbox();
+    const groundY = groundLevel();
 
-    // Generation bands
+    // Generation labels on the left
     const bands = el("g", { class: "gen-band" }, vp);
     const levels = [...new Set(visible.map(b => b.level))].sort((a, b) => a - b);
     levels.forEach(l => {
-      const y = l * ROW;
-      if (l % 2 === 0) el("rect", { x: bounds.x - BAND_LABEL, y: y - (ROW - H) / 2, width: bounds.w + BAND_LABEL + 40, height: ROW }, bands);
-      const t = el("text", { x: bounds.x - BAND_LABEL + 10, y: y + H / 2 + 4 }, bands);
+      const t = el("text", { x: bounds.x - BAND_LABEL + 10, y: levelY(l) + H / 2 + 4 }, bands);
       t.textContent = `Gen. ${l + minGen}`;
     });
 
-    const links = el("g", {}, vp);
+    // Ground: a soft meadow with a gentle hill under each tree
+    const ground = el("g", { class: "ground" }, vp);
+    const gx0 = bounds.x - BAND_LABEL, gx1 = bounds.x + bounds.w + 60;
+    let hills = `M${gx0},${groundY + 10}`;
+    for (const r of roots) {
+      const rp = trunkBase(r);
+      if (!rp) continue;
+      const span = Math.max(220, Math.min(r.width, 520));
+      hills += `L${rp.x - span / 2},${groundY + 10}Q${rp.x},${groundY - 26} ${rp.x + span / 2},${groundY + 10}`;
+    }
+    hills += `L${gx1},${groundY + 10}L${gx1},${groundY + 140}L${gx0},${groundY + 140}Z`;
+    el("path", { d: hills, class: "meadow" }, ground);
+
+    const wood = el("g", { class: "wood" }, vp);
+    const foliage = el("g", { class: "foliage" }, vp);
     const nodes = el("g", {}, vp);
+
+    // Trunks and roots
+    for (const r of roots) {
+      const base = trunkBase(r);
+      if (!base) continue;
+      const g = el("g", { class: "branch" }, wood);
+      const weight = 1 + descendantsCount(r);
+      const w0 = 14 + Math.sqrt(weight) * 3.2;
+      const p = [{ x: base.x, y: groundY }, { x: base.x, y: groundY - (groundY - base.y) * 0.4 }, { x: base.x, y: base.y + 30 }, base];
+      el("path", { d: taper(p, w0, Math.max(8, w0 * 0.55)), class: "bark" }, g);
+      const rr = rng(r.pid * 7);
+      for (let i = 0; i < 4; i++) {
+        const dir = i < 2 ? -1 : 1, spread = (i % 2 ? 0.6 : 1) * (40 + rr() * 30);
+        const rp = [{ x: base.x + dir * w0 * 0.2, y: groundY - 6 }, { x: base.x + dir * spread * 0.4, y: groundY + 4 }, { x: base.x + dir * spread * 0.8, y: groundY + 8 + rr() * 10 }, { x: base.x + dir * spread, y: groundY + 18 + rr() * 16 }];
+        el("path", { d: taper(rp, w0 * 0.45, 1.5), class: "bark root" }, g);
+      }
+      linkEls.push({ el: g, ids: [r.pid] });
+    }
 
     for (const b of visible) {
       const pp = pos.get(b.pid);
-      // Marriage lines (to spouses drawn in this block, or to spouses drawn elsewhere)
+      // Marriage: a short vine joining the couple
       for (const sid of P(b.pid).spouses) {
         const sp = pos.get(sid);
         if (!sp) continue;
+        const same = blockOf.get(sid) === b;
+        if (!same && b.pid > sid) continue; // drawn once
         const [l, r] = pp.x < sp.x ? [pp, sp] : [sp, pp];
-        let d;
-        if (l.y === r.y && blockOf.get(sid) === b) d = `M${l.x + W},${l.y + H / 2}H${r.x}`;
-        else if (b.pid < sid || blockOf.get(sid) === b) continue; // drawn once from the other side
-        else d = `M${pp.x + W / 2},${pp.y}C${pp.x + W / 2},${pp.y - 50} ${sp.x + W / 2},${sp.y - 50} ${sp.x + W / 2},${sp.y}`;
-        const e = el("path", { d, class: "link marriage" + (blockOf.get(sid) === b ? "" : " far") }, links);
-        if (blockOf.get(sid) !== b) e.setAttribute("stroke-dasharray", "5 4");
-        linkEls.push({ el: e, ids: [b.pid, sid] });
+        const g = el("g", { class: "branch marriage" }, wood);
+        if (same && l.y === r.y) {
+          const y = l.y + H / 2, x0 = l.x + W - 4, x1 = r.x + 4;
+          el("path", { d: `M${x0},${y}C${x0 + 6},${y - 7} ${x1 - 6},${y - 7} ${x1},${y}`, class: "vine" }, g);
+          el("path", { d: `M${(x0 + x1) / 2},${y - 9} c-3,-4 -9,-1 -5,4 l5,5 l5,-5 c4,-5 -2,-8 -5,-4z`, class: "heart" }, g);
+        } else {
+          el("path", { d: `M${pp.x + W / 2},${pp.y}C${pp.x + W / 2},${pp.y - 60} ${sp.x + W / 2},${sp.y - 60} ${sp.x + W / 2},${sp.y}`, class: "vine far" }, g);
+        }
+        linkEls.push({ el: g, ids: [b.pid, sid] });
       }
-      // Parent → children connectors
-      if (collapsed.has(b.pid)) continue;
+      if (collapsed.has(b.pid)) {
+        if (b.blockChildren.length) {
+          // A closed bud of leaves hints at the hidden branch
+          const g = el("g", { class: "branch" }, foliage);
+          crown(g, pp.x + W / 2 + 34, pp.y - 6, b.pid);
+          linkEls.push({ el: g, ids: [b.pid] });
+        }
+        continue;
+      }
+      // Branches growing up from each couple to their children
       for (const u of b.unions) {
         const kids = u.kids.filter(c => pos.has(c) && blockOf.get(c)?.pid === c);
         if (!kids.length) continue;
         const sp = u.partner != null ? pos.get(u.partner) : null;
-        let sx, sy;
+        let sx;
         if (sp && sp.y === pp.y) {
           const [l, r] = pp.x < sp.x ? [pp, sp] : [sp, pp];
-          sx = (l.x + W + r.x) / 2; sy = pp.y + H / 2;
-        } else { sx = pp.x + W / 2; sy = pp.y + H; }
-        const barY = pp.y + H + (ROW - H) / 2;
+          sx = (l.x + W + r.x) / 2;
+        } else sx = pp.x + W / 2;
+        const sy = pp.y + H / 2;
         const parents = [b.pid, ...(u.partner != null ? [u.partner] : [])];
-        const stem = el("path", { d: `M${sx},${sy}V${barY}`, class: "link" }, links);
-        linkEls.push({ el: stem, ids: parents, any: kids });
         for (const c of kids) {
-          const cp = pos.get(c);
-          const cx = cp.x + W / 2;
-          const e = el("path", { d: `M${sx},${barY}H${cx}V${cp.y}`, class: "link" }, links);
-          linkEls.push({ el: e, ids: [...parents, c] });
+          const cp = pos.get(c), cb = blockOf.get(c);
+          const cx = cp.x + W / 2 + (cb.spouses.length === 1 ? (W + GAP_COUPLE) / 2 : 0), cy = cp.y + H / 2;
+          const weight = 1 + descendantsCount(cb);
+          const w0 = 5 + Math.sqrt(weight) * 2.4;
+          const p = [{ x: sx, y: sy }, { x: sx, y: sy - (sy - cy) * 0.55 }, { x: cx, y: cy + (sy - cy) * 0.5 }, { x: cx, y: cy }];
+          const g = el("g", { class: "branch" }, wood);
+          el("path", { d: taper(p, w0, Math.max(3, w0 * 0.45)), class: "bark" }, g);
+          linkEls.push({ el: g, ids: [...parents, c] });
+          const lg = el("g", { class: "branch" }, foliage);
+          leavesAlong(lg, p, c * 13 + 5, 3 + Math.min(3, Math.floor(weight / 3)));
+          linkEls.push({ el: lg, ids: [...parents, c] });
         }
+      }
+      if (!b.blockChildren.length) {
+        const g = el("g", { class: "branch" }, foliage);
+        const order = rowOrder(b);
+        const first = pos.get(order[0]), last = pos.get(order[order.length - 1]);
+        crown(g, (first.x + last.x + W) / 2, pp.y, b.pid);
+        linkEls.push({ el: g, ids: [b.pid] });
       }
     }
 
@@ -412,8 +566,8 @@
       for (const id of rowOrder(b)) drawPerson(id, nodes);
       if (b.blockChildren.length) {
         const pp = pos.get(b.pid);
-        const g = el("g", { class: "toggle", transform: `translate(${pp.x + W / 2},${pp.y + H + 14})` }, nodes);
         const isC = collapsed.has(b.pid);
+        const g = el("g", { class: "toggle" + (isC ? " closed" : ""), transform: `translate(${pp.x + W / 2},${pp.y - 2})` }, nodes);
         el("circle", { r: isC ? 13 : 9 }, g);
         const t = el("text", { "text-anchor": "middle", y: 4 }, g);
         t.textContent = isC ? `+${descendantsCount(b)}` : "−";
@@ -425,20 +579,34 @@
     applyHighlight();
   }
 
+  // Where a tree's trunk meets its first couple
+  function trunkBase(r) {
+    const pp = pos.get(r.pid);
+    if (!pp) return null;
+    const order = rowOrder(r);
+    const x = order.length > 1 ? (pos.get(order[0]).x + W + pos.get(order[1]).x) / 2 : pp.x + W / 2;
+    return { x, y: pp.y + H / 2 };
+  }
+  const groundLevel = () => levelY(0) + H + 90;
+
   function drawPerson(id, parent) {
     const p = P(id), xy = pos.get(id);
     const br = branchOf.get(id);
     const g = el("g", { class: "person" + (isInlaw(id) ? " inlaw" : ""), transform: `translate(${xy.x},${xy.y})`, tabindex: 0, role: "button" }, parent);
-    el("rect", { class: "card", width: W, height: H, rx: 9 }, g);
-    if (br) el("rect", { width: 6, height: H, fill: br.color, "clip-path": "url(#card-clip)" }, g);
+    el("rect", { class: "card", width: W, height: H, rx: 14 }, g);
+    // A leaf in the colour of the person's branch of the family
+    const lg = el("g", { transform: `translate(11,${H / 2 + 8}) rotate(-62) scale(0.8)` }, g);
+    el("path", { d: LEAF, fill: br ? br.color : "var(--wood)", class: "badge" }, lg);
+    el("path", { d: "M1,0 Q11,-1 20,0", class: "vein" }, lg);
     const hasNick = !!p.soprannome;
-    const t1 = el("text", { class: "name", x: 16, y: hasNick ? 20 : 25 }, g);
-    t1.textContent = fit(p.nome, 16);
-    const t2 = el("text", { class: "surname", x: 16, y: hasNick ? 35 : 42 }, g);
-    t2.textContent = fit(p.cognome, 20);
+    const tx = 30;
+    const t1 = el("text", { class: "name", x: tx, y: hasNick ? 20 : 25 }, g);
+    t1.textContent = fit(p.nome, 14);
+    const t2 = el("text", { class: "surname", x: tx, y: hasNick ? 35 : 42 }, g);
+    t2.textContent = fit(p.cognome, 17);
     if (hasNick) {
-      const t3 = el("text", { class: "nick", x: 16, y: 50 }, g);
-      t3.textContent = `“${fit(p.soprannome, 18)}”`;
+      const t3 = el("text", { class: "nick", x: tx, y: 50 }, g);
+      t3.textContent = `“${fit(p.soprannome, 15)}”`;
     }
     el("title", {}, g).textContent = fullName(p) + (hasNick ? ` (“${p.soprannome}”)` : "");
     g.addEventListener("click", ev => { ev.stopPropagation(); select(id); });
@@ -450,6 +618,9 @@
   function bbox() {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const { x, y } of pos.values()) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + W); y1 = Math.max(y1, y + H); }
+    // Leave room for the leaves on top and the trunks and roots below
+    y0 -= 40;
+    y1 = Math.max(y1, groundLevel() + 50);
     return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   }
 
@@ -621,17 +792,18 @@
     const r = svg.getBoundingClientRect();
     const b = bbox();
     const k = clampK(Math.min((r.width - 60) / (b.w + BAND_LABEL), (r.height - 60) / b.h, 1.1));
-    // Keep cards readable: when the whole tree would be tiny, show its top-left corner instead.
-    if (k < 0.55) {
-      view.k = 0.6;
+    // Keep cards readable: when the whole tree would be tiny, show its roots (bottom-left) instead.
+    if (k < 0.4) {
+      view.k = 0.5;
       view.x = 16 - (b.x - BAND_LABEL) * view.k;
-      view.y = 24 - b.y * view.k;
+      view.y = r.height - 16 - (b.y + b.h) * view.k;
       applyView();
       return;
     }
     view.k = k;
     view.x = (r.width - (b.w + BAND_LABEL) * k) / 2 - (b.x - BAND_LABEL) * k;
-    view.y = (r.height - b.h * k) / 2 - b.y * k;
+    // Stand the trees on the bottom of the screen, like on the ground
+    view.y = r.height - 16 - (b.y + b.h) * k;
     applyView();
   }
   function centerOn(id) {

@@ -31,8 +31,9 @@
     --heart: #c4573f;
     --card-edge: #d8ccb4;
   }
-  @media (prefers-color-scheme: dark) {
+  /* The "forest" night scene is the look of the tree, whatever the system theme */
     :root {
+      color-scheme: dark;
       --bg: #1a1917;
       --surface: #262421;
       --surface-2: #302d29;
@@ -57,7 +58,6 @@
       --heart: #d9735b;
       --card-edge: #4a4238;
     }
-  }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
   body {
@@ -367,7 +367,8 @@
   }
   // The tree grows upwards: the oldest generation sits at the bottom, on the trunk.
   const maxLevel = Math.max(...[...blockOf.values()].map(b => b.level));
-  const levelY = l => (maxLevel - l) * ROW;
+  // The first fork is taller, so the main branches rise like a crown instead of spreading flat
+  const levelY = l => (maxLevel - l) * ROW + (l === 0 ? ROW * 0.9 : 0);
   function layout() {
     pos = new Map(); visible = [];
     let x = BAND_LABEL;
@@ -587,7 +588,7 @@
     const x = order.length > 1 ? (pos.get(order[0]).x + W + pos.get(order[1]).x) / 2 : pp.x + W / 2;
     return { x, y: pp.y + H / 2 };
   }
-  const groundLevel = () => levelY(0) + H + 90;
+  const groundLevel = () => levelY(0) + H + 130;
 
   function drawPerson(id, parent) {
     const p = P(id), xy = pos.get(id);

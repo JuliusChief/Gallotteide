@@ -188,6 +188,16 @@ window.FAMILY_DATA = {
     {"tipo": "genitore", "a": 32, "b": 38},
     {"tipo": "genitore", "a": 33, "b": 38},
     {"tipo": "genitore", "a": 32, "b": 39},
-    {"tipo": "genitore", "a": 33, "b": 39}
+    {"tipo": "genitore", "a": 33, "b": 39},
+    {"tipo": "genitore", "a": 1, "b": 13},
+    {"tipo": "genitore", "a": 2, "b": 13},
+    {"tipo": "genitore", "a": 1, "b": 32},
+    {"tipo": "genitore", "a": 2, "b": 32},
+    {"tipo": "genitore", "a": 1, "b": 44},
+    {"tipo": "genitore", "a": 2, "b": 44},
+    {"tipo": "genitore", "a": 1, "b": 60},
+    {"tipo": "genitore", "a": 2, "b": 60},
+    {"tipo": "genitore", "a": 1, "b": 69},
+    {"tipo": "genitore", "a": 2, "b": 69}
   ]
 };

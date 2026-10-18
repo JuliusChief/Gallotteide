@@ -9,7 +9,7 @@ Open `docs/index.html` in a browser (double-click works, no server needed) to ex
 - **Search** by first name, surname or nickname (press `/` to jump to the search box).
 - **Legend**: click a branch to open and frame it.
 - **Navigate** by dragging, scrolling or pinching to zoom; the buttons bottom-left zoom, fit the tree, expand everything or go back to the overview.
-- Works on phones and follows the system light/dark theme.
+- Works on phones, with a night "forest" colour scheme.
 
 ## Updating the data
 

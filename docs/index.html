@@ -93,6 +93,8 @@
   .person .surname { fill: var(--muted); font-size: 12px; }
   .person .nick { fill: var(--accent); font-size: 11.5px; font-style: italic; }
   .person:hover .card { stroke: var(--line-strong); }
+  .person:focus { outline: none; }
+  .person:focus-visible .card { stroke: var(--accent); stroke-width: 2; }
   .person.selected .card { stroke: var(--accent); stroke-width: 3; }
   .person.match .card { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
   .dim { opacity: var(--dim); }
@@ -491,8 +493,10 @@
     const up = [id];
     while (up.length) for (const par of P(up.pop()).parents) if (!set.has(par)) { set.add(par); up.push(par); }
     const down = [id];
-    while (down.length) for (const c of P(down.pop()).children) if (!set.has(c)) { set.add(c); down.push(c); }
-    for (const s of P(id).spouses) set.add(s);
+    const desc = [id];
+    while (down.length) for (const c of P(down.pop()).children) if (!set.has(c)) { set.add(c); down.push(c); desc.push(c); }
+    // Spouses of the person and of their descendants complete each couple
+    for (const d of desc) for (const s of P(d).spouses) set.add(s);
     return set;
   }
   function applyHighlight() {
